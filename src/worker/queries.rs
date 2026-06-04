@@ -33,10 +33,10 @@ use jj_lib::{
 use pollster::FutureExt as _;
 
 use crate::messages::{
-    ChangeHunk, ChangeLocation, ChangeRange, MultilineString, RevSet, queries::*,
+    ChangeHunk, ChangeLocation, ChangeRange, MultilineString, RevId, RevSet, TreePath, queries::*,
 };
 #[cfg(test)]
-use crate::messages::{RevHeader, RevId};
+use crate::messages::RevHeader;
 
 use super::{WorkspaceSession, git_util::get_git_remote_names};
 
@@ -697,6 +697,190 @@ impl<'content> UnifiedDiffHunk<'content> {
         self.lines
             .extend(lines.into_iter().map(|line| (DiffLineType::Added, line)));
         self.right_line_range.end += self.lines.len() - old_len;
+    }
+}
+
+/// Query conflict slices for a file in a revision.
+/// Decomposes Git-style conflict markers into structured data for the visual merge tool.
+pub async fn query_conflict_slices(
+    ws: &WorkspaceSession<'_>,
+    revision_id: &RevId,
+    path: &TreePath,
+) -> Result<ConflictSlicesResponse> {
+    let commit = ws.resolve_commit_id(&revision_id.commit)?;
+    let tree = commit.tree();
+
+    let repo_path = RepoPath::from_internal_string(&path.repo_path)?;
+    let entry = tree.path_value(&repo_path).await?;
+
+    // Ensure this is a conflict
+    if entry.is_resolved() {
+        return Ok(ConflictSlicesResponse {
+            path: path.clone(),
+            slices: vec![],
+        });
+    }
+
+    // Materialize the conflict to get the content with Git-style markers
+    let materialized = conflicts::materialize_tree_value(
+        ws.repo().store(),
+        &repo_path,
+        entry,
+        tree.labels(),
+    )
+    .await?;
+
+    match materialized {
+        MaterializedTreeValue::FileConflict(file) => {
+            let mut conflict_content = vec![];
+            conflicts::materialize_merge_result(
+                &file.contents,
+                &file.labels,
+                &mut conflict_content,
+                &ConflictMaterializeOptions {
+                    marker_style: ConflictMarkerStyle::Git,
+                    marker_len: None,
+                    merge: MergeOptions {
+                        hunk_level: FileMergeHunkLevel::Line,
+                        same_change: SameChange::Accept,
+                    },
+                },
+            )?;
+
+            let slices = parse_conflict_slices(&conflict_content, file.labels.as_slice())?;
+            Ok(ConflictSlicesResponse {
+                path: path.clone(),
+                slices,
+            })
+        }
+        _ => Err(anyhow!("Path is not a file conflict")),
+    }
+}
+
+/// Parse Git-style conflict markers into structured ConflictSlice objects.
+/// Format:
+///   <<<<<<< LABEL
+///   ours content
+///   =======
+///   theirs content
+///   >>>>>>> LABEL
+fn parse_conflict_slices(
+    content: &[u8],
+    labels: &[String],
+) -> Result<Vec<ConflictSlice>> {
+    let content_str = String::from_utf8_lossy(content);
+    let lines: Vec<&str> = content_str.lines().collect();
+
+    let mut slices = Vec::new();
+    let mut index = 0;
+    let mut i = 0;
+
+    // Use labels if available, otherwise use defaults
+    let (ours_label, theirs_label) = match labels.len() {
+        0 => ("ours", "theirs"),
+        1 => (labels[0].as_str(), "theirs"),
+        _ => (labels[0].as_str(), labels[1].as_str()),
+    };
+
+    while i < lines.len() {
+        if let Some(_marker) = parse_conflict_start(lines[i]) {
+            // Found start of conflict
+            let conflict_start = i;
+
+            // Find the separator =======
+            let mut separator_idx = None;
+            let mut end_idx = None;
+
+            for j in (i + 1)..lines.len() {
+                if is_conflict_separator(lines[j]) {
+                    separator_idx = Some(j);
+                } else if let Some(_end_marker) = parse_conflict_end(lines[j]) {
+                    end_idx = Some(j);
+                    break;
+                }
+            }
+
+            if let (Some(sep), Some(end)) = (separator_idx, end_idx) {
+                // Extract content
+                let ours_content: Vec<String> = lines[(conflict_start + 1)..sep]
+                    .iter()
+                    .map(|&s| s.to_string())
+                    .collect();
+
+                let theirs_content: Vec<String> = lines[(sep + 1)..end]
+                    .iter()
+                    .map(|&s| s.to_string())
+                    .collect();
+
+                let result_content: Vec<String> = lines[conflict_start..=end]
+                    .iter()
+                    .map(|&s| s.to_string())
+                    .collect();
+
+                // Determine conflict type
+                let conflict_type = if ours_content == theirs_content {
+                    ConflictType::IdenticalChange
+                } else if ours_content.is_empty() {
+                    ConflictType::RightChange
+                } else if theirs_content.is_empty() {
+                    ConflictType::LeftChange
+                } else {
+                    ConflictType::Conflict
+                };
+
+                slices.push(ConflictSlice {
+                    index,
+                    sides: [
+                        ConflictSide {
+                            content: MultilineString {
+                                lines: ours_content,
+                            },
+                            label: ours_label.to_string(),
+                        },
+                        ConflictSide {
+                            content: MultilineString {
+                                lines: theirs_content,
+                            },
+                            label: theirs_label.to_string(),
+                        },
+                    ],
+                    initial_result: MultilineString {
+                        lines: result_content,
+                    },
+                    conflict_type,
+                });
+
+                index += 1;
+                i = end + 1;
+            } else {
+                // Malformed conflict, skip this line
+                i += 1;
+            }
+        } else {
+            i += 1;
+        }
+    }
+
+    Ok(slices)
+}
+
+fn parse_conflict_start(line: &str) -> Option<&str> {
+    if line.starts_with("<<<<<<< ") {
+        Some(&line[8..])
+    } else {
+        None
+    }
+}
+
+fn is_conflict_separator(line: &str) -> bool {
+    line.starts_with("=======")
+}
+
+fn parse_conflict_end(line: &str) -> Option<&str> {
+    if line.starts_with(">>>>>>> ") {
+        Some(&line[8..])
+    } else {
+        None
     }
 }
 

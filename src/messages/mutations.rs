@@ -286,3 +286,12 @@ pub struct ExternalResolve {
     pub id: RevId,
     pub path: TreePath,
 }
+
+/// Resolves a file's conflict with user-provided content from the inline merge tool.
+#[derive(Deserialize, Debug)]
+#[cfg_attr(feature = "ts-rs", derive(TS), ts(export, export_to = "app/messages/"))]
+pub struct ResolveConflict {
+    pub id: RevId,
+    pub path: TreePath,
+    pub resolved_content: String,
+}

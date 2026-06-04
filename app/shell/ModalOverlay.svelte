@@ -23,7 +23,9 @@
         bottom: 33px;
         left: 0;
 
-        background: rgb(var(--ctp-overlay1-rgb) / 40%);
+        background: rgb(var(--ctp-overlay1-rgb) / 50%);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
         pointer-events: auto;
 
         display: grid;

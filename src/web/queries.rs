@@ -7,8 +7,8 @@ use axum::{Json, Router, extract::State, routing::post};
 use serde::Deserialize;
 
 use crate::messages::{
-    RepoConfig, RepoStatus, RevSet,
-    queries::{LogPage, RevsResult},
+    RepoConfig, RepoStatus, RevId, RevSet, TreePath,
+    queries::{ConflictSlicesResponse, LogPage, RevsResult},
 };
 use crate::worker::SessionEvent;
 
@@ -22,6 +22,7 @@ pub fn router() -> Router<AppState> {
         .route("/query_log_next_page", post(query_log_next_page))
         .route("/query_revisions", post(query_revisions))
         .route("/query_remotes", post(query_remotes))
+        .route("/query_conflict_slices", post(query_conflict_slices))
         .route("/query_recent_workspaces", post(query_recent_workspaces))
         .route("/query_snapshot", post(query_snapshot))
 }
@@ -139,5 +140,25 @@ async fn query_snapshot(
     let (tx, rx) = channel();
     state.worker_tx.send(SessionEvent::ExecuteSnapshot { tx })?;
     let result = rx.recv()?;
+    Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+pub struct QueryConflictSlices {
+    revision_id: RevId,
+    path: TreePath,
+}
+
+async fn query_conflict_slices(
+    State(state): State<AppState>,
+    Json(req): Json<QueryConflictSlices>,
+) -> Result<Json<ConflictSlicesResponse>, ApiError> {
+    let (tx, rx) = channel();
+    state.worker_tx.send(SessionEvent::QueryConflictSlices {
+        tx,
+        revision_id: req.revision_id,
+        path: req.path,
+    })?;
+    let result = rx.recv()??;
     Ok(Json(result))
 }

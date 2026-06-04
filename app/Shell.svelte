@@ -28,12 +28,18 @@
     import ModalOverlay from "./shell/ModalOverlay.svelte";
     import ErrorDialog from "./shell/ErrorDialog.svelte";
     import ProgressDialog from "./shell/ProgressDialog.svelte";
+    import OmniBar from "./shell/OmniBar.svelte";
+    import ActivityBar from "./shell/ActivityBar.svelte";
+    import SidePanel from "./shell/SidePanel.svelte";
     import RecentWorkspaces from "./shell/RecentWorkspaces.svelte";
     import { onMount, setContext } from "svelte";
     import InputDialog from "./shell/InputDialog.svelte";
     import type Settings from "./shell/Settings";
     import type { RepoEvent } from "./messages/RepoEvent";
     import RepositoryMutator from "./mutators/RepositoryMutator";
+    import CheatSheet from "./shell/CheatSheet.svelte";
+    import ActivityLog from "./shell/ActivityLog.svelte";
+    import { cheatSheetVisible, activityLogVisible } from "./stores.js";
 
     interface $$Slots {
         default: {
@@ -151,6 +157,8 @@
     }
     $: if ($repoStatusEvent && $revisionSelectEvent) {
         loadChange($revisionSelectEvent);
+    } else if (!$revisionSelectEvent) {
+        selection = { type: "wait" };
     }
     $: if (!isTauri()) {
         document.title =
@@ -270,42 +278,52 @@
 
 <Zone operand={{ type: "Repository" }} alwaysTarget let:target>
     <div id="shell" class={$repoConfigEvent?.type == "Workspace" ? $repoConfigEvent.theme_override : ""}>
-        {#if $repoConfigEvent.type == "Initial"}
-            <Pane>
-                <h2 slot="header">Loading...</h2>
-            </Pane>
-        {:else if $repoConfigEvent.type == "Workspace"}
-            <slot workspace={$repoConfigEvent} {selection} />
-        {:else if $repoConfigEvent.type == "LoadError"}
-            <ModalOverlay>
-                <ErrorDialog title="No Workspace Loaded">
-                    <p style="grid-column: 1/3">
-                        You can run <code>gg</code> in a Jujutsu workspace or open one from the Repository menu.
-                    </p>
-                    <RecentWorkspaces workspaces={recentWorkspaces} />
-                </ErrorDialog>
-            </ModalOverlay>
-        {:else if $repoConfigEvent.type == "TimeoutError"}
-            <ModalOverlay>
-                <ErrorDialog title="No Workspace Loaded" severe>
-                    <p>Error communicating with backend: the operation is taking too long.</p>
-                    <p>You may need to restart GG to continue.</p>
-                    <RecentWorkspaces workspaces={recentWorkspaces} />
-                </ErrorDialog>
-            </ModalOverlay>
-        {:else}
-            <ModalOverlay>
-                <ErrorDialog title="Fatal Error" severe>
-                    <p>Error communicating with backend: {$repoConfigEvent.message}.</p>
-                    <p>You may need to restart GG to continue.</p>
-                    <RecentWorkspaces workspaces={recentWorkspaces} />
-                </ErrorDialog>
-            </ModalOverlay>
-        {/if}
+        <ActivityBar />
 
-        <div class="separator" style="grid-row: 2"></div>
+        <div class="main-area">
+            <SidePanel />
+            <div class="slot-area">
+                <OmniBar />
+            {#if $repoConfigEvent.type == "Initial"}
+                <Pane>
+                    <h2 slot="header">Loading...</h2>
+                </Pane>
+            {:else if $repoConfigEvent.type == "Workspace"}
+                <slot workspace={$repoConfigEvent} {selection} />
+            {:else if $repoConfigEvent.type == "LoadError"}
+                <ModalOverlay>
+                    <ErrorDialog title="No Workspace Loaded">
+                        <p style="grid-column: 1/3">
+                            You can run <code>gg</code> in a Jujutsu workspace or open one from the Repository menu.
+                        </p>
+                        <RecentWorkspaces workspaces={recentWorkspaces} />
+                    </ErrorDialog>
+                </ModalOverlay>
+            {:else if $repoConfigEvent.type == "TimeoutError"}
+                <ModalOverlay>
+                    <ErrorDialog title="No Workspace Loaded" severe>
+                        <p>Error communicating with backend: the operation is taking too long.</p>
+                        <p>You may need to restart GG to continue.</p>
+                        <RecentWorkspaces workspaces={recentWorkspaces} />
+                    </ErrorDialog>
+                </ModalOverlay>
+            {:else}
+                <ModalOverlay>
+                    <ErrorDialog title="Fatal Error" severe>
+                        <p>Error communicating with backend: {$repoConfigEvent.message}.</p>
+                        <p>You may need to restart GG to continue.</p>
+                        <RecentWorkspaces workspaces={recentWorkspaces} />
+                    </ErrorDialog>
+                </ModalOverlay>
+            {/if}
+            </div>
+        </div>
 
-        <StatusBar {target} />
+        <div class="separator" style="grid-area: sep"></div>
+
+        <div class="footer-area">
+            <StatusBar {target} />
+        </div>
 
         {#if $currentInput}
             <ModalOverlay>
@@ -339,6 +357,14 @@
             </ModalOverlay>
         {/if}
 
+        {#if $cheatSheetVisible}
+            <CheatSheet />
+        {/if}
+
+        {#if $activityLogVisible}
+            <ActivityLog />
+        {/if}
+
         {#if $currentContext && $hasMenu}
             <ContextMenu
                 operand={$currentContext}
@@ -354,21 +380,40 @@
 
 <style>
     #shell {
+        position: relative;
         width: 100vw;
         height: 100vh;
 
         display: grid;
-        grid-template-columns: 1fr;
+        grid-template-columns: 56px 1fr;
         grid-template-rows: 1fr 3px 30px;
         grid-template-areas:
-            "content"
-            "."
-            "footer";
+            "activity main"
+            "activity sep"
+            "activity footer";
 
         background: var(--ctp-crust);
         color: var(--ctp-text);
 
         user-select: none;
+    }
+
+    .main-area {
+        grid-area: main;
+        position: relative;
+        display: flex;
+        overflow: hidden;
+    }
+
+    .slot-area {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .footer-area {
+        grid-area: footer;
+        overflow: hidden;
     }
 
     .separator {

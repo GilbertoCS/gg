@@ -1,5 +1,5 @@
 import type { MutationResult } from "./messages/MutationResult";
-import { currentInput, currentMutation, progressEvent, repoConfigEvent, repoStatusEvent, revisionSelectEvent } from "./stores";
+import { currentInput, currentMutation, progressEvent, repoConfigEvent, repoStatusEvent, revisionSelectEvent, logPush, logUpdate } from "./stores";
 import { isTauri, type Query } from "./events";
 
 export { isTauri, onEvent, type Query, type Settable } from "./events";
@@ -56,6 +56,9 @@ export function trigger(command: string, request?: InvokeArgs, onError?: () => v
  * call an IPC which, if successful, modifies the repo
  */
 export async function mutate<T>(command: string, mutation: T, options?: { operation?: string; ignoreImmutable?: boolean }): Promise<boolean> {
+    const logLabel = options?.operation ?? command.replace(/_/g, " ");
+    const logId = logPush({ label: logLabel, status: "running" });
+
     if (options?.operation) {
         progressEvent.set({ type: "Message", text: options.operation });
     } else {
@@ -114,15 +117,23 @@ export async function mutate<T>(command: string, mutation: T, options?: { operat
                     });
                 }
             }
+            logUpdate(logId, { status: "ok", detail: value.type });
             currentMutation.set(null);
             return true;
         }
 
         // failed; transition from overlay or delay to error
+        const errDetail = value.type === "PreconditionError"
+            ? value.message
+            : value.type === "InternalError"
+                ? value.message.lines.join(" ")
+                : (value as { type: string }).type;
+        logUpdate(logId, { status: "error", detail: errDetail });
         currentMutation.set({ type: "data", value });
         return false;
     } catch (error: any) {
         console.error(error);
+        logUpdate(logId, { status: "error", detail: error.toString() });
         currentMutation.set({ type: "error", message: error.toString() });
         return false;
     }

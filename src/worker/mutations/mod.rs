@@ -15,15 +15,17 @@ use jj_cli::{
     ui::Ui,
 };
 use jj_lib::{
-    backend::{CommitId, TreeValue},
+    backend::{CommitId, CopyId, TreeValue},
     conflicts::{self, ConflictMarkerStyle, ConflictMaterializeOptions, MaterializedTreeValue},
+    merge::Merge,
+    merged_tree::MergedTree,
+    merged_tree_builder::MergedTreeBuilder,
     files::FileMergeHunkLevel,
     git::{
         self, GitFetchRefExpression, GitPushOptions, GitPushRefTargets, GitSettings,
         GitSubprocessOptions, REMOTE_NAME_FOR_LOCAL_GIT_REPO,
     },
     merge::{Diff, SameChange},
-    merged_tree::MergedTree,
     object_id::ObjectId as ObjectIdTrait,
     op_walk,
     ref_name::WorkspaceNameBuf,
@@ -49,7 +51,7 @@ use super::{
 
 use crate::messages::mutations::{
     ExternalDiff, ExternalResolve, ForgetWorkspace, GitFetch, GitPush, GitRefspec, MutationOptions,
-    MutationResult, RenameWorkspace, UndoOperation,
+    MutationResult, RenameWorkspace, ResolveConflict, UndoOperation,
 };
 
 macro_rules! precondition {
@@ -178,6 +180,69 @@ impl Mutation for ExternalResolve {
         }
 
         let mut tx = ws.start_transaction().await?;
+        tx.repo_mut()
+            .rewrite_commit(&commit)
+            .set_tree(new_tree)
+            .write()
+            .await?;
+
+        match ws
+            .finish_transaction(tx, format!("resolve conflicts in {}", commit.id().hex()))
+            .await?
+        {
+            Some(new_status) => Ok(MutationResult::Updated {
+                new_status,
+                new_selection: None,
+            }),
+            None => Ok(MutationResult::Unchanged),
+        }
+    }
+}
+
+#[async_trait(?Send)]
+impl Mutation for ResolveConflict {
+    async fn execute(
+        self: Box<Self>,
+        ws: &mut WorkspaceSession,
+        _options: &MutationOptions,
+    ) -> Result<MutationResult> {
+        let commit = ws.resolve_change_id(&self.id)?;
+
+        if ws.check_immutable(vec![commit.id().clone()])? {
+            precondition!("Revision is immutable");
+        }
+
+        let tree = commit.tree();
+        let repo_path = RepoPath::from_internal_string(&self.path.repo_path)?;
+
+        // Check if the path exists and is a conflict
+        let entry = tree.path_value(&repo_path).await?;
+        if entry.is_resolved() {
+            return Ok(MutationResult::Unchanged);
+        }
+
+        // Write the resolved content as a new file
+        let mut tx = ws.start_transaction().await?;
+        let store = tx.repo().store();
+        
+        // Create a new file with the resolved content
+        let file_id = store
+            .write_file(&repo_path, &mut self.resolved_content.as_bytes())
+            .await?;
+
+        // Create a resolved TreeValue::File using Merge::normal
+        let resolved_value = Merge::normal(TreeValue::File { 
+            id: file_id, 
+            executable: false, // Preserve original executable bit if possible
+            copy_id: CopyId::placeholder(),
+        });
+
+        // Update the tree with the resolved value
+        let mut new_tree_builder = MergedTreeBuilder::new(tree.clone());
+        new_tree_builder.set_or_remove(repo_path.to_owned(), resolved_value);
+        let new_tree = new_tree_builder.write_tree().await?;
+
+        // Update the commit with the new tree
         tx.repo_mut()
             .rewrite_commit(&commit)
             .set_tree(new_tree)

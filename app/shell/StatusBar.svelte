@@ -125,16 +125,41 @@
         padding: 0 6px;
         gap: 6px;
         align-items: center;
+        background:
+            linear-gradient(180deg, var(--ctp-surface0) 0%, var(--ctp-crust) 100%);
+        border-top: 2px solid var(--ctp-overlay0);
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* Scanline overlay effect */
+    #status-bar::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.03) 2px,
+            rgba(0, 0, 0, 0.03) 4px
+        );
+        pointer-events: none;
+        z-index: 1;
     }
 
     .repo-bar {
         display: grid;
         grid-template-columns: minmax(auto, 40%) 1fr minmax(auto, 40%);
+        position: relative;
+        z-index: 2;
     }
 
     .drag-bar {
         display: flex;
         justify-content: center;
+        position: relative;
+        z-index: 2;
     }
 
     .substatus {

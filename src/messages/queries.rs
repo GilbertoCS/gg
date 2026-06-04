@@ -21,6 +21,57 @@ pub struct RevConflict {
     pub hunk: ChangeHunk,
 }
 
+/// One side of a conflict (Ours or Theirs).
+#[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "ts-rs", derive(TS), ts(export, export_to = "app/messages/"))]
+pub struct ConflictSide {
+    pub content: MultilineString,
+    pub label: String,
+}
+
+/// Type of merge conflict.
+#[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "ts-rs", derive(TS), ts(export, export_to = "app/messages/"))]
+pub enum ConflictType {
+    /// Both sides modified the same region
+    Conflict,
+    /// Only left side (Ours) has changes
+    LeftChange,
+    /// Only right side (Theirs) has changes
+    RightChange,
+    /// Both sides made identical changes
+    IdenticalChange,
+}
+
+/// A decomposed conflict with separate content for each side.
+/// Used by the visual three-pane merge resolver.
+#[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "ts-rs", derive(TS), ts(export, export_to = "app/messages/"))]
+pub struct ConflictSlice {
+    pub index: usize,
+    /// [Ours, Theirs] - content from each parent
+    pub sides: [ConflictSide; 2],
+    /// The initially proposed resolution (materialized conflict markers)
+    pub initial_result: MultilineString,
+    pub conflict_type: ConflictType,
+}
+
+/// Request to query conflict slices for a file.
+#[derive(Deserialize, Debug)]
+#[cfg_attr(feature = "ts-rs", derive(TS), ts(export, export_to = "app/messages/"))]
+pub struct ConflictSlicesRequest {
+    pub revision_id: RevId,
+    pub path: TreePath,
+}
+
+/// Response containing conflict slices for a file.
+#[derive(Serialize, Debug)]
+#[cfg_attr(feature = "ts-rs", derive(TS), ts(export, export_to = "app/messages/"))]
+pub struct ConflictSlicesResponse {
+    pub path: TreePath,
+    pub slices: Vec<ConflictSlice>,
+}
+
 /// The type of modification made to a file in a diff.
 #[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "ts-rs", derive(TS), ts(export, export_to = "app/messages/"))]

@@ -34,3 +34,40 @@ export function dragOverWidget(event: DragEvent) {
     event.stopPropagation();
     currentTarget.set(null);
 }
+
+export const activeActivity = writable<string>('graph');
+export const sidePanelVisible = writable<boolean>(true);
+export const cheatSheetVisible = writable<boolean>(false);
+
+export type LogEntry = {
+    id: number;
+    ts: number;
+    endTs?: number;
+    label: string;
+    status: "running" | "ok" | "error" | "info";
+    detail?: string;
+};
+
+export const operationLog = writable<LogEntry[]>([]);
+export const activityLogVisible = writable<boolean>(false);
+
+let _logSeq = 0;
+export function logPush(entry: Omit<LogEntry, "id" | "ts">): number {
+    const id = ++_logSeq;
+    operationLog.update(l => [{ ...entry, id, ts: Date.now() }, ...l].slice(0, 200));
+    return id;
+}
+export function logUpdate(id: number, patch: Partial<Pick<LogEntry, "status" | "detail">>): void {
+    const endTs = (patch.status === "ok" || patch.status === "error") ? Date.now() : undefined;
+    operationLog.update(l => l.map(e => e.id === id ? { ...e, ...patch, ...(endTs ? { endTs } : {}) } : e));
+}
+
+let _lastOpDesc: string | undefined;
+repoStatusEvent.subscribe(status => {
+    if (!status) return;
+    if (status.operation_description && status.operation_description !== _lastOpDesc) {
+        _lastOpDesc = status.operation_description;
+        logPush({ label: status.operation_description, status: "info" });
+    }
+});
+

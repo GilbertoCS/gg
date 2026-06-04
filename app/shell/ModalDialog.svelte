@@ -41,32 +41,81 @@
 
 <style>
     #dialog-chrome {
+        --accent: #00b4d8;
+
         grid-area: 2/2/2/2;
 
-        background: var(--ctp-mantle);
-        border-radius: 9px;
-        border: 3px solid var(--ctp-overlay1);
+        background:
+            linear-gradient(180deg, var(--ctp-base) 0%, var(--ctp-mantle) 100%);
+        border-radius: var(--radius-lg);
+        border: 2px solid var(--ctp-overlay0);
+        box-shadow: var(--shadow-lg);
 
-        display: grid;
-        grid-template-columns: 30px 1fr 33px;
-        grid-template-rows: 30px auto 30px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-width: 320px;
+        max-width: 90vw;
+        position: relative;
+    }
+
+    /* Subtle grid pattern overlay */
+    #dialog-chrome::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image:
+            linear-gradient(var(--ctp-overlay0) 1px, transparent 1px),
+            linear-gradient(90deg, var(--ctp-overlay0) 1px, transparent 1px);
+        background-size: 20px 20px;
+        opacity: 0.05;
+        pointer-events: none;
+        z-index: 0;
     }
 
     #dialog-header {
-        margin-top: 6px;
-        padding: 0 15px;
-        grid-area: 1/2/2/2;
+        height: 48px;
+        min-height: 48px;
+        padding: 0 14px;
         display: flex;
         align-items: center;
         justify-content: center;
+        background: linear-gradient(180deg, var(--ctp-surface0) 0%, var(--ctp-surface1) 100%);
+        border-bottom: 2px solid var(--ctp-overlay0);
+        position: relative;
+        z-index: 1;
+    }
+
+    #dialog-header::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg,
+            transparent 0%,
+            var(--accent) 20%,
+            var(--accent) 80%,
+            transparent 100%
+        );
+        box-shadow: 0 2px 8px var(--accent);
+    }
+
+    #dialog-header.error {
+        --accent: var(--ctp-red);
+        color: var(--ctp-red);
     }
 
     #dialog-content {
-        grid-area: 2/2/2/2;
+        padding: 14px;
         display: grid;
         grid-template-columns: auto 1fr;
         align-items: baseline;
-        gap: 3px 6px;
+        gap: 6px 10px;
+        z-index: 1;
+        overflow-y: auto;
+        max-height: 70vh;
     }
 
     #dialog-content > :global(:nth-child(even)) {
@@ -94,12 +143,14 @@
     }
 
     #dialog-commands {
-        margin-right: 3px;
-        grid-area: 3/1/3/4;
+        padding: 10px 14px;
         display: flex;
         align-items: center;
         justify-content: end;
-        gap: 6px;
+        gap: 8px;
+        border-top: 1px solid var(--ctp-overlay0);
+        background: var(--ctp-surface0);
+        z-index: 1;
     }
 
     .error {

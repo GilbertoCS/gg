@@ -80,6 +80,12 @@ pub enum SessionEvent {
         tx: Sender<Result<Vec<String>>>,
         tracking_bookmark: Option<String>,
     },
+    /// Query conflict slices for a file in a revision.
+    QueryConflictSlices {
+        tx: Sender<Result<messages::queries::ConflictSlicesResponse>>,
+        revision_id: messages::RevId,
+        path: messages::TreePath,
+    },
     /// Start a new log query with the given revset string.
     QueryLog {
         tx: Sender<Result<messages::queries::LogPage>>,
@@ -278,6 +284,13 @@ impl Session for WorkspaceSession<'_> {
                     tx,
                     tracking_bookmark,
                 } => tx.send(queries::query_remotes(&self, tracking_bookmark))?,
+                SessionEvent::QueryConflictSlices {
+                    tx,
+                    revision_id,
+                    path,
+                } => {
+                    tx.send(queries::query_conflict_slices(&self, &revision_id, &path).await)?;
+                }
                 SessionEvent::QueryLog {
                     tx,
                     query: revset_string,

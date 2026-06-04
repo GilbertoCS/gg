@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Tauri Dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "tauri", "--", "dev"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug Rust (LLDB)",
+      "cargo": {
+        "args": ["build", "--bin=gg", "--features=app"],
+        "filter": {
+          "name": "gg",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "TAURI_DEV_HOST": "true"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Tauri Dev + Debug Rust",
+      "configurations": ["Debug Rust (LLDB)"],
+      "preLaunchTask": "npm: dev"
+    }
+  ]
+}

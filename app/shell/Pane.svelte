@@ -20,8 +20,9 @@
     }
 
     .header {
-        border-bottom: 1px solid var(--ctp-overlay0);
+        border-bottom: 2px solid var(--ctp-overlay0);
         padding: 6px 6px 3px 6px;
+        background: linear-gradient(180deg, var(--ctp-surface0) 0%, var(--ctp-surface1) 100%);
     }
 
     .body {

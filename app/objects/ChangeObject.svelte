@@ -11,6 +11,7 @@
     import { changeSelectEvent, repoConfigEvent } from "../stores";
     import { mutate } from "../ipc";
     import ActionLink from "../controls/ActionLink.svelte";
+    import ConflictResolverModal from "../shell/ConflictResolverModal.svelte";
 
     export let headers: RevHeader[] | null;
     export let change: RevChange;
@@ -57,6 +58,14 @@
             path: change.path,
         });
     }
+
+    // Inline conflict resolver state
+    let isResolverOpen = false;
+
+    function onInlineResolve() {
+        if (!headers || !change.has_conflict) return;
+        isResolverOpen = true;
+    }
 </script>
 
 <Object
@@ -72,10 +81,15 @@
         <div class="layout" class:target>
             <Icon name={icon} state={context ? null : state} />
             <span>{hint ?? change.path.relative_path}</span>
-            {#if hasMergeTool && change.has_conflict && operand}
-                <ActionWidget tip="resolve in merge tool" onClick={onExternalResolve}>
-                    <Icon name="external-link" /> Resolve
+            {#if change.has_conflict && operand}
+                <ActionWidget tip="resolve inline" onClick={onInlineResolve}>
+                    <Icon name="git-merge" /> Resolve Inline
                 </ActionWidget>
+                {#if hasMergeTool}
+                    <ActionWidget tip="resolve in merge tool" onClick={onExternalResolve}>
+                        <Icon name="external-link" />
+                    </ActionWidget>
+                {/if}
             {:else if hasDiffTool && operand}
                 <ActionLink tip="open in diff tool" onClick={onExternalDiff}>
                     <Icon name="external-link" />
@@ -84,6 +98,12 @@
         </div>
     </Zone>
 </Object>
+
+<ConflictResolverModal
+    bind:isOpen={isResolverOpen}
+    revisionId={headers?.[0]?.id ?? null}
+    path={change.path}
+/>
 
 <style>
     .layout {
