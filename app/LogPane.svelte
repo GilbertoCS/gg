@@ -6,7 +6,7 @@
     import type { RevSet } from "./messages/RevSet";
     import { getInput, query, trigger } from "./ipc.js";
     import { sameChange } from "./ids.js";
-    import { ignoreToggled, repoStatusEvent, revisionSelectEvent } from "./stores.js";
+    import { ignoreToggled, repoStatusEvent, revisionSelectEvent, zoomLevel } from "./stores.js";
     import RevisionMutator from "./mutators/RevisionMutator.js";
     import Pane from "./shell/Pane.svelte";
     import RevisionObject from "./objects/RevisionObject.svelte";
@@ -394,33 +394,42 @@
         {/if}
     </div>
 
-    <ListWidget
-        slot="body"
-        type="Revision"
-        descendant={$revisionSelectEvent?.to.commit.prefix}
-        {list}
-        bind:clientHeight={logHeight}
-        bind:clientWidth={logWidth}
-        bind:scrollTop={logScrollTop}>
-        {#if graphRows}
-            <GraphLog
-                containerHeight={logHeight}
-                containerWidth={logWidth}
-                scrollTop={logScrollTop}
-                rows={graphRows}
-                let:row>
-                {#if row}
-                    <RevisionObject
-                        header={row.revision}
-                        selected={isInSelectedRange(row, $revisionSelectEvent)}
-                        onClick={handleClick}
-                        onShiftClick={handleShiftClick} />
-                {/if}
-            </GraphLog>
-        {:else}
-            <div>Loading changes...</div>
-        {/if}
-    </ListWidget>
+    <div slot="body" class="graph-body">
+        <div class="column-headers">
+            <span class="col-graph">Graph</span>
+            <span class="col-desc">Description</span>
+            <span class="col-author">Author</span>
+            <span class="col-sha">SHA</span>
+        </div>
+        <ListWidget
+            type="Revision"
+            descendant={$revisionSelectEvent?.to.commit.prefix}
+            {list}
+            bind:clientHeight={logHeight}
+            bind:clientWidth={logWidth}
+            bind:scrollTop={logScrollTop}>
+            {#if graphRows}
+                <div class="zoom-wrapper" style="transform: scale({$zoomLevel / 100}); transform-origin: top left; width: {100 / ($zoomLevel / 100)}%; height: {100 / ($zoomLevel / 100)}%">
+                    <GraphLog
+                        containerHeight={logHeight / ($zoomLevel / 100)}
+                        containerWidth={logWidth / ($zoomLevel / 100)}
+                        scrollTop={logScrollTop / ($zoomLevel / 100)}
+                        rows={graphRows}
+                        let:row>
+                        {#if row}
+                            <RevisionObject
+                                header={row.revision}
+                                selected={isInSelectedRange(row, $revisionSelectEvent)}
+                                onClick={handleClick}
+                                onShiftClick={handleShiftClick} />
+                        {/if}
+                    </GraphLog>
+                </div>
+            {:else}
+                <div>Loading changes...</div>
+            {/if}
+        </ListWidget>
+    </div>
 </Pane>
 
 <style>
@@ -443,5 +452,56 @@
     input {
         font-family: var(--stack-code);
         font-size: 14px;
+    }
+
+    .zoom-wrapper {
+        pointer-events: auto;
+    }
+
+    .graph-body {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        height: 100%;
+    }
+
+    .column-headers {
+        display: flex;
+        align-items: center;
+        height: 26px;
+        min-height: 26px;
+        padding: 0 6px;
+        gap: 8px;
+        background: var(--ctp-surface0);
+        border-bottom: 1px solid var(--ctp-overlay0);
+        font-size: 10px;
+        font-weight: 700;
+        font-family: var(--stack-industrial);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--ctp-subtext0);
+        user-select: none;
+    }
+
+    .col-graph {
+        width: 80px;
+        flex-shrink: 0;
+    }
+
+    .col-desc {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .col-author {
+        width: 100px;
+        flex-shrink: 0;
+        text-align: right;
+    }
+
+    .col-sha {
+        width: 70px;
+        flex-shrink: 0;
+        text-align: right;
     }
 </style>

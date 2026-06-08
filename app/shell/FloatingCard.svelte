@@ -37,7 +37,6 @@
         flex-direction: column;
         z-index: 50;
         user-select: none;
-        position: relative;
     }
 
     /* Subtle grid pattern overlay */

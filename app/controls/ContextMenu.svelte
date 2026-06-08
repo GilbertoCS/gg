@@ -8,6 +8,7 @@
     import ChangeMutator from "../mutators/ChangeMutator";
     import RefMutator from "../mutators/RefMutator";
     import WorkspaceMutator from "../mutators/WorkspaceMutator";
+    import Icon from "./Icon.svelte";
 
     export let operand: Operand;
     export let x: number;
@@ -128,37 +129,82 @@
     on:keydown={onKeyDown}
     bind:this={menuElement}>
     {#if (operand.type === "Revision" || operand.type === "Revisions") && revisionEnabled}
-        <button disabled={!revisionEnabled.new_child} on:click={() => onClick("new_child")}>New child</button>
-        <button disabled={!revisionEnabled.new_parent} on:click={() => onClick("new_parent")}
-            >New inserted parent</button>
+        <div class="menu-group-label">Create</div>
+        <button disabled={!revisionEnabled.new_child} on:click={() => onClick("new_child")}>
+            <Icon name="plus" /><span>New child</span>
+        </button>
+        <button disabled={!revisionEnabled.new_parent} on:click={() => onClick("new_parent")}>
+            <Icon name="corner-down-right" /><span>New inserted parent</span>
+        </button>
         <hr />
-        <button disabled={!revisionEnabled.edit} on:click={() => onClick("edit")}>Edit as working copy</button>
-        <button disabled={!revisionEnabled.revert} on:click={() => onClick("revert")}>Revert into working copy</button>
-        <button disabled={!revisionEnabled.duplicate} on:click={() => onClick("duplicate")}>Duplicate</button>
-        <button disabled={!revisionEnabled.abandon} on:click={() => onClick("abandon")}>Abandon</button>
+        <div class="menu-group-label">Modify</div>
+        <button disabled={!revisionEnabled.edit} on:click={() => onClick("edit")}>
+            <Icon name="edit-3" /><span>Edit as working copy</span>
+        </button>
+        <button disabled={!revisionEnabled.revert} on:click={() => onClick("revert")}>
+            <Icon name="rotate-ccw" /><span>Revert into working copy</span>
+        </button>
+        <button disabled={!revisionEnabled.duplicate} on:click={() => onClick("duplicate")}>
+            <Icon name="copy" /><span>Duplicate</span>
+        </button>
+        <button disabled={!revisionEnabled.abandon} on:click={() => onClick("abandon")}>
+            <Icon name="trash-2" /><span class="danger">Abandon</span>
+        </button>
         <hr />
-        <button disabled={!revisionEnabled.squash} on:click={() => onClick("squash")}>Squash into parent</button>
-        <button disabled={!revisionEnabled.restore} on:click={() => onClick("restore")}>Restore from parent</button>
+        <div class="menu-group-label">History</div>
+        <button disabled={!revisionEnabled.squash} on:click={() => onClick("squash")}>
+            <Icon name="minimize-2" /><span>Squash into parent</span>
+        </button>
+        <button disabled={!revisionEnabled.restore} on:click={() => onClick("restore")}>
+            <Icon name="maximize-2" /><span>Restore from parent</span>
+        </button>
         <hr />
-        <button disabled={!revisionEnabled.bookmark} on:click={() => onClick("bookmark")}>Create bookmark...</button>
+        <button disabled={!revisionEnabled.bookmark} on:click={() => onClick("bookmark")}>
+            <Icon name="bookmark" /><span>Create bookmark...</span>
+        </button>
     {:else if operand.type === "Change" && changeEnabled}
-        <button disabled={!changeEnabled.squash} on:click={() => onClick("squash")}>Squash into parent</button>
-        <button disabled={!changeEnabled.restore} on:click={() => onClick("restore")}>Restore from parent</button>
+        <button disabled={!changeEnabled.squash} on:click={() => onClick("squash")}>
+            <Icon name="minimize-2" /><span>Squash into parent</span>
+        </button>
+        <button disabled={!changeEnabled.restore} on:click={() => onClick("restore")}>
+            <Icon name="maximize-2" /><span>Restore from parent</span>
+        </button>
     {:else if operand.type === "Ref" && refEnabled}
-        <button disabled={!refEnabled.track} on:click={() => onClick("track")}>Track</button>
-        <button disabled={!refEnabled.untrack} on:click={() => onClick("untrack")}>Untrack</button>
+        <div class="menu-group-label">Tracking</div>
+        <button disabled={!refEnabled.track} on:click={() => onClick("track")}>
+            <Icon name="eye" /><span>Track</span>
+        </button>
+        <button disabled={!refEnabled.untrack} on:click={() => onClick("untrack")}>
+            <Icon name="eye-off" /><span>Untrack</span>
+        </button>
         <hr />
-        <button disabled={!refEnabled.push_all} on:click={() => onClick("push-all")}>Push</button>
-        <button disabled={!refEnabled.push_single} on:click={() => onClick("push-single")}>Push to remote...</button>
-        <button disabled={!refEnabled.fetch_all} on:click={() => onClick("fetch-all")}>Fetch</button>
-        <button disabled={!refEnabled.fetch_single} on:click={() => onClick("fetch-single")}
-            >Fetch from remote...</button>
+        <div class="menu-group-label">Sync</div>
+        <button disabled={!refEnabled.push_all} on:click={() => onClick("push-all")}>
+            <Icon name="upload-cloud" /><span>Push</span>
+        </button>
+        <button disabled={!refEnabled.push_single} on:click={() => onClick("push-single")}>
+            <Icon name="upload-cloud" /><span>Push to remote...</span>
+        </button>
+        <button disabled={!refEnabled.fetch_all} on:click={() => onClick("fetch-all")}>
+            <Icon name="download-cloud" /><span>Fetch</span>
+        </button>
+        <button disabled={!refEnabled.fetch_single} on:click={() => onClick("fetch-single")}>
+            <Icon name="download-cloud" /><span>Fetch from remote...</span>
+        </button>
         <hr />
-        <button disabled={!refEnabled.rename} on:click={() => onClick("rename")}>Rename...</button>
-        <button disabled={!refEnabled.delete} on:click={() => onClick("delete")}>Delete</button>
+        <button disabled={!refEnabled.rename} on:click={() => onClick("rename")}>
+            <Icon name="edit-3" /><span>Rename...</span>
+        </button>
+        <button disabled={!refEnabled.delete} on:click={() => onClick("delete")}>
+            <Icon name="trash-2" /><span class="danger">Delete</span>
+        </button>
     {:else if operand.type === "Workspace"}
-        <button on:click={() => onClick("rename")}>Rename...</button>
-        <button on:click={() => onClick("forget")}>Forget</button>
+        <button on:click={() => onClick("rename")}>
+            <Icon name="edit-3" /><span>Rename...</span>
+        </button>
+        <button on:click={() => onClick("forget")}>
+            <Icon name="trash-2" /><span class="danger">Forget</span>
+        </button>
     {/if}
 </div>
 
@@ -166,28 +212,44 @@
     .context-menu {
         position: fixed;
         z-index: 1000;
-        background: var(--ctp-surface0);
+        background: var(--ctp-base);
         border: 1px solid var(--ctp-overlay0);
-        border-radius: 3px;
-        box-shadow: 2px 2px var(--ctp-text);
+        border-radius: 6px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+        min-width: 200px;
+        padding: 4px 0;
+        outline: none;
+    }
+
+    .menu-group-label {
+        padding: 4px 12px 2px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--ctp-subtext0);
+        font-family: var(--stack-industrial);
+        pointer-events: none;
     }
 
     hr {
         border: none;
-        border-top: 1px solid var(--ctp-overlay0);
-        margin: 2px 0;
+        border-top: 1px solid var(--ctp-surface1);
+        margin: 4px 0;
     }
 
     button {
         width: 100%;
-        display: block;
+        display: flex;
+        align-items: center;
+        gap: 8px;
         border: none;
-        padding: 4px 12px;
-
+        padding: 5px 12px;
         text-align: left;
         background: none;
         color: var(--ctp-text);
         font-family: var(--stack-industrial);
+        font-size: 12px;
 
         &:disabled {
             color: var(--ctp-overlay0);
@@ -196,9 +258,22 @@
         &:not(:disabled) {
             cursor: pointer;
             &:hover {
-                background: var(--ctp-flamingo);
-                color: black;
+                background: var(--ctp-surface1);
             }
         }
+    }
+
+    button :global(svg) {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+    }
+
+    .danger {
+        color: var(--ctp-red);
+    }
+
+    button:disabled .danger {
+        color: var(--ctp-overlay0);
     }
 </style>

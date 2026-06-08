@@ -37,9 +37,34 @@ export function dragOverWidget(event: DragEvent) {
 
 export const activeActivity = writable<string>('graph');
 export const sidePanelVisible = writable<boolean>(true);
-export const rightActiveActivity = writable<string>('graph');
-export const rightPanelVisible = writable<boolean>(true);
 export const cheatSheetVisible = writable<boolean>(false);
+
+// Kept for backward compatibility with orphaned components
+export const rightActiveActivity = writable<string>('graph');
+export const rightPanelVisible = writable<boolean>(false);
+
+// Graph branch colors palette (GitKraken-style)
+export const BRANCH_COLORS = [
+    '#0099e5', // blue
+    '#34c759', // green
+    '#ff9500', // orange
+    '#af52de', // purple
+    '#ff3b30', // red
+    '#5ac8fa', // light blue
+    '#ffcc00', // yellow
+    '#ff2d55', // pink
+    '#30b0c7', // teal
+    '#8e8e93', // gray
+];
+
+// Column-to-color cache for the graph
+export const columnColorMap = writable<Map<number, string>>(new Map());
+
+// Highlighted branch name (for hover-to-highlight feature)
+export const highlightedBranch = writable<string | null>(null);
+
+// Zoom level for the graph
+export const zoomLevel = writable<number>(100);
 
 export type LogEntry = {
     id: number;

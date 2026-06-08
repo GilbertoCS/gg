@@ -30,8 +30,7 @@
     import ProgressDialog from "./shell/ProgressDialog.svelte";
     import OmniBar from "./shell/OmniBar.svelte";
     import ActivityBar from "./shell/ActivityBar.svelte";
-    import RightActivityBar from "./shell/RightActivityBar.svelte";
-    import RightSidePanel from "./shell/RightSidePanel.svelte";
+    import Toolbar from "./shell/Toolbar.svelte";
     import SidePanel from "./shell/SidePanel.svelte";
     import RecentWorkspaces from "./shell/RecentWorkspaces.svelte";
     import { onMount, setContext } from "svelte";
@@ -280,6 +279,7 @@
 
 <Zone operand={{ type: "Repository" }} alwaysTarget let:target>
     <div id="shell" class={$repoConfigEvent?.type == "Workspace" ? $repoConfigEvent.theme_override : ""}>
+        <Toolbar />
         <ActivityBar />
 
         <div class="main-area">
@@ -319,10 +319,7 @@
                 </ModalOverlay>
             {/if}
             </div>
-            <RightSidePanel />
         </div>
-
-        <RightActivityBar />
 
         <div class="separator" style="grid-area: sep"></div>
 
@@ -390,12 +387,13 @@
         height: 100vh;
 
         display: grid;
-        grid-template-columns: 56px 1fr 56px;
-        grid-template-rows: 1fr 3px 30px;
+        grid-template-columns: 48px 1fr;
+        grid-template-rows: 40px 1fr 1px 28px;
         grid-template-areas:
-            "activity main right-activity"
-            "activity sep right-activity"
-            "activity footer right-activity";
+            "toolbar toolbar"
+            "activity main"
+            "activity sep"
+            "activity footer";
 
         background: var(--ctp-crust);
         color: var(--ctp-text);

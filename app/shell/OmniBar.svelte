@@ -1,18 +1,80 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
     import Icon from "../controls/Icon.svelte";
+    import { selectionHeaders, revisionSelectEvent } from "../stores";
+    import type { RevHeader } from "../messages/RevHeader";
 
     let expanded = false;
     let query = "";
     let inputEl: HTMLInputElement;
+    let selectedIdx = 0;
+
+    type Result = { type: "commit" | "bookmark" | "tag" | "revset"; label: string; sublabel: string; header?: RevHeader };
+
+    $: results = computeResults(query, $selectionHeaders);
+
+    function computeResults(q: string, headers: RevHeader[]): Result[] {
+        if (!q.trim()) return [];
+        const lq = q.toLowerCase();
+        const out: Result[] = [];
+        const seen = new Set<string>();
+
+        for (const h of headers) {
+            if (out.length >= 15) break;
+            // match on bookmarks
+            for (const ref of h.refs) {
+                if (ref.type === "LocalBookmark" && ref.bookmark_name.toLowerCase().includes(lq) && !seen.has("b:" + ref.bookmark_name)) {
+                    seen.add("b:" + ref.bookmark_name);
+                    out.push({ type: "bookmark", label: ref.bookmark_name, sublabel: h.id.commit.hex.slice(0, 8), header: h });
+                }
+                if (ref.type === "Tag" && ref.tag_name.toLowerCase().includes(lq) && !seen.has("t:" + ref.tag_name)) {
+                    seen.add("t:" + ref.tag_name);
+                    out.push({ type: "tag", label: ref.tag_name, sublabel: h.id.commit.hex.slice(0, 8), header: h });
+                }
+            }
+            // match on description
+            if (h.description.lines[0]?.toLowerCase().includes(lq) && !seen.has("c:" + h.id.commit.hex)) {
+                seen.add("c:" + h.id.commit.hex);
+                out.push({ type: "commit", label: h.description.lines[0] || "(no description)", sublabel: h.id.commit.hex.slice(0, 8), header: h });
+            }
+            // match on commit/change id
+            if (h.id.commit.hex.startsWith(lq) || h.id.change.hex.startsWith(lq)) {
+                const key = "c:" + h.id.commit.hex;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    out.push({ type: "commit", label: h.description.lines[0] || "(no description)", sublabel: h.id.commit.hex.slice(0, 8), header: h });
+                }
+            }
+        }
+
+        // always offer to run as a revset query
+        if (out.length === 0 || q.includes("(") || q.includes("|") || q.includes("&") || q.includes("::")) {
+            out.push({ type: "revset", label: `Run revset: ${q}`, sublabel: "query" });
+        }
+
+        return out;
+    }
 
     function toggle() {
         expanded = !expanded;
         if (expanded) {
+            selectedIdx = 0;
             setTimeout(() => inputEl?.focus(), 50);
         } else {
             query = "";
         }
+    }
+
+    function close() {
+        expanded = false;
+        query = "";
+    }
+
+    function selectResult(r: Result) {
+        if (r.header) {
+            revisionSelectEvent.set({ from: r.header.id, to: r.header.id });
+        }
+        close();
     }
 
     function handleKeydown(event: KeyboardEvent) {
@@ -21,8 +83,20 @@
             toggle();
         }
         if (event.key === "Escape" && expanded) {
-            expanded = false;
-            query = "";
+            close();
+        }
+    }
+
+    function handleInputKeydown(e: KeyboardEvent) {
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            selectedIdx = Math.min(selectedIdx + 1, results.length - 1);
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            selectedIdx = Math.max(selectedIdx - 1, 0);
+        } else if (e.key === "Enter") {
+            e.preventDefault();
+            if (results[selectedIdx]) selectResult(results[selectedIdx]);
         }
     }
 
@@ -33,18 +107,11 @@
     onDestroy(() => {
         document.removeEventListener("keydown", handleKeydown);
     });
-
-    function onSubmit() {
-        // TODO: wire to revset navigation when canvas layout is ready
-        console.log("omnibar query:", query);
-        expanded = false;
-        query = "";
-    }
 </script>
 
 <div class="omnibar-wrapper" class:expanded>
     {#if expanded}
-        <div class="omnibar-backdrop" role="button" tabindex="-1" on:click={() => { expanded = false; query = ""; }} on:keydown={() => {}}></div>
+        <div class="omnibar-backdrop" role="button" tabindex="-1" on:click={close} on:keydown={() => {}}></div>
         <div class="omnibar-card">
             <div class="omnibar-input-row">
                 <Icon name="search" />
@@ -52,12 +119,27 @@
                     bind:this={inputEl}
                     bind:value={query}
                     placeholder="Search commits, bookmarks, or type a revset..."
-                    on:keydown={(e) => { if (e.key === "Enter") onSubmit(); }}
+                    on:keydown={handleInputKeydown}
                 />
                 <span class="shortcut-hint">ESC</span>
             </div>
+            {#if results.length > 0}
+                <ul class="omnibar-results">
+                    {#each results as r, i}
+                        <li class:selected={i === selectedIdx}>
+                            <button type="button" on:click={() => selectResult(r)} on:mouseenter={() => selectedIdx = i}>
+                                <Icon name={r.type === "bookmark" ? "git-branch" : r.type === "tag" ? "tag" : r.type === "revset" ? "terminal" : "git-commit"} />
+                                <span class="result-label">{r.label}</span>
+                                <span class="result-sub">{r.sublabel}</span>
+                            </button>
+                        </li>
+                    {/each}
+                </ul>
+            {:else if query.trim()}
+                <div class="omnibar-empty">No results found</div>
+            {/if}
             <div class="omnibar-hints">
-                <span>Tip: <kbd>Ctrl+K</kbd> to toggle</span>
+                <span><kbd>↑↓</kbd> navigate · <kbd>↵</kbd> select · <kbd>Esc</kbd> close</span>
             </div>
         </div>
     {:else}
@@ -131,9 +213,67 @@
         border: 1px solid var(--ctp-overlay0);
     }
 
+    .omnibar-results {
+        list-style: none;
+        margin: 0;
+        padding: 4px 0;
+        max-height: 300px;
+        overflow-y: auto;
+        border-top: 1px solid var(--ctp-overlay0);
+    }
+
+    .omnibar-results li button {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 6px 14px;
+        border: none;
+        background: transparent;
+        color: var(--ctp-text);
+        font-size: 13px;
+        cursor: pointer;
+        text-align: left;
+        font-family: inherit;
+    }
+
+    .omnibar-results li.selected button,
+    .omnibar-results li button:hover {
+        background: var(--ctp-surface1);
+    }
+
+    .omnibar-results li button :global(svg) {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+        color: var(--ctp-subtext0);
+    }
+
+    .result-label {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .result-sub {
+        font-size: 11px;
+        color: var(--ctp-subtext0);
+        font-family: var(--stack-code);
+        flex-shrink: 0;
+    }
+
+    .omnibar-empty {
+        padding: 12px 14px;
+        font-size: 12px;
+        color: var(--ctp-subtext0);
+        text-align: center;
+        border-top: 1px solid var(--ctp-overlay0);
+    }
+
     .omnibar-hints {
         padding: 6px 14px;
-        font-size: 12px;
+        font-size: 11px;
         color: var(--ctp-subtext0);
         background: var(--ctp-crust);
         border-top: 1px solid var(--ctp-overlay0);
@@ -141,7 +281,7 @@
 
     .omnibar-hints kbd {
         font-family: var(--stack-code);
-        font-size: 11px;
+        font-size: 10px;
         padding: 1px 4px;
         border-radius: var(--radius-sm);
         background: var(--ctp-surface0);

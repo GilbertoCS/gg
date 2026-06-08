@@ -1,7 +1,7 @@
 <script lang="ts">
     import type { RevHeader } from "../messages/RevHeader";
     import type { Operand } from "../messages/Operand";
-    import { ignoreToggled, currentTarget, revisionSelectEvent } from "../stores.js";
+    import { ignoreToggled, currentTarget, revisionSelectEvent, highlightedBranch } from "../stores.js";
     import IdSpan from "../controls/IdSpan.svelte";
     import BookmarkObject from "./BookmarkObject.svelte";
     import Object from "./Object.svelte";
@@ -10,6 +10,24 @@
     import TagObject from "./TagObject.svelte";
     import AuthorSpan from "../controls/AuthorSpan.svelte";
     import WorkspaceObject from "./WorkspaceObject.svelte";
+
+    function authorInitials(name: string): string {
+        const parts = name.trim().split(/\s+/);
+        if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        return name.substring(0, 2).toUpperCase();
+    }
+
+    function authorColor(name: string): string {
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        const hue = Math.abs(hash % 360);
+        return `hsl(${hue}, 55%, 55%)`;
+    }
+
+    $: initials = authorInitials(header.author.name);
+    $: avatarBg = authorColor(header.author.name);
+    $: firstBookmark = header.refs.find(r => r.type === "LocalBookmark");
+    $: isHighlighted = $highlightedBranch != null && firstBookmark?.type === "LocalBookmark" && firstBookmark.bookmark_name === $highlightedBranch;
 
     export let header: RevHeader;
     export let child: RevHeader | null = null;
@@ -92,7 +110,8 @@
         </div>
     {:else}
         <Zone {operand} let:target let:hint={dropHint}>
-            <div class="layout" class:target>
+            <div class="layout" class:target class:highlighted={isHighlighted}>
+                <span class="avatar" style="background: {avatarBg}" title={header.author.name}>{initials}</span>
                 <IdSpan id={header.id.change} pronoun={context || target || dropHint != null} />
 
                 <span class="text desc truncate" class:indescribable={!context && header.description.lines[0] == ""}>
@@ -135,13 +154,40 @@
         width: 100%;
         height: 30px;
         display: grid;
-        grid-template-areas: ". desc refs";
-        grid-template-columns: auto 1fr auto;
-        align-items: baseline;
-        gap: 6px;
+        grid-template-areas: "avatar . desc refs";
+        grid-template-columns: 22px auto 1fr auto;
+        align-items: center;
+        gap: 4px;
 
         /* skip past svg lines when used in a graph */
         padding-left: var(--leftpad);
+        border-bottom: 1px solid rgba(var(--ctp-overlay0-rgb, 128,128,128), 0.15);
+        transition: background 80ms ease;
+    }
+
+    .layout:hover {
+        background: rgba(var(--ctp-overlay0-rgb, 128,128,128), 0.08);
+    }
+
+    .layout.highlighted {
+        background: rgba(var(--ctp-overlay0-rgb, 128,128,128), 0.12);
+    }
+
+    .avatar {
+        grid-area: avatar;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 700;
+        font-family: var(--stack-industrial);
+        color: white;
+        pointer-events: none;
+        flex-shrink: 0;
+        line-height: 1;
     }
 
     .layout.target {
@@ -189,9 +235,9 @@
 
     @media (width >= 1680px) {
         .layout {
-            grid-template-areas: ". desc refs email";
-            grid-template-columns: auto auto 1fr auto;
-            gap: 9px;
+            grid-template-areas: "avatar . desc refs email";
+            grid-template-columns: 22px auto auto 1fr auto;
+            gap: 6px;
         }
 
         .email {

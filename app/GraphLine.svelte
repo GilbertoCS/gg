@@ -2,9 +2,11 @@
     import type { EnhancedLine } from "./GraphLog.svelte";
     import type { Operand } from "./messages/Operand";
     import Zone from "./objects/Zone.svelte";
-    import { currentTarget } from "./stores";
+    import { currentTarget, BRANCH_COLORS } from "./stores";
 
     export let line: EnhancedLine;
+
+    $: lineColor = BRANCH_COLORS[line.source[0] % BRANCH_COLORS.length];
 
     let isMerge = line.type == "ToIntersection";
     let allowEarlyBreak = line.type == "FromNode";
@@ -110,12 +112,12 @@
     {/each}
 {/if}
 
-<path d={path} fill="none" stroke-dasharray={line.indirect ? "1,2" : "none"} class:target={$currentTarget == operand} />
+<path d={path} fill="none" stroke-dasharray={line.indirect ? "1,2" : "none"} class:target={$currentTarget == operand} style="stroke: {lineColor}" />
 
 <style>
     path {
         pointer-events: none;
-        stroke: var(--ctp-blue);
+        stroke-width: 2px;
     }
 
     foreignObject > :global(*) {

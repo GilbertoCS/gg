@@ -1,47 +1,49 @@
 <script lang="ts">
     import type { RevHeader } from "./messages/RevHeader";
-    import { currentContext } from "./stores.js";
+    import { currentContext, BRANCH_COLORS } from "./stores.js";
 
     export let header: RevHeader;
+    export let column: number = 0;
 
     let context = false;
     $: context = $currentContext?.type == "Revision" && header == $currentContext.header;
     $: wcClass = header.working_copy_of != null ? "other-wc" : "wc";
+    $: nodeColor = BRANCH_COLORS[column % BRANCH_COLORS.length];
 </script>
 
-{#if header.is_immutable}
-    {#if header.is_working_copy}
-        <circle class={wcClass} class:context cx="9" cy="15" r="6" />
-    {:else}
-        <circle class:context cx="9" cy="15" r="6" />
-    {/if}
+{#if header.is_working_copy}
+    <!-- WIP node: pulsing double-ring -->
+    <circle class="wip-glow" cx="9" cy="15" r="8" style="stroke: {nodeColor}" />
+    <circle cx="9" cy="15" r="6" style="stroke: {nodeColor}; fill: {nodeColor}" class:context />
+    <circle cx="9" cy="15" r="3" style="fill: var(--ctp-base)" />
+{:else if header.is_immutable}
+    <!-- Immutable: filled solid circle -->
+    <circle cx="9" cy="15" r="5" style="stroke: {nodeColor}; fill: {nodeColor}" class:context />
 {:else}
-    <circle class:context cx="9" cy="15" r="6" class="mutable" />
-    {#if header.is_working_copy}
-        <circle class={wcClass} class:context cx="9" cy="15" r="3" />
-    {/if}
+    <!-- Mutable: hollow circle -->
+    <circle cx="9" cy="15" r="5" class="mutable" style="stroke: {nodeColor}" class:context />
 {/if}
 
 <style>
     circle {
         pointer-events: none;
-        stroke: var(--ctp-blue);
-        fill: var(--ctp-blue);
+        stroke-width: 2px;
     }
 
-    .wc {
-        stroke: var(--ctp-green);
-        fill: var(--ctp-green);
+    .wip-glow {
+        fill: none;
+        stroke-width: 1.5px;
+        opacity: 0.5;
+        animation: wip-pulse 2s ease-in-out infinite;
     }
 
-    .other-wc {
-        stroke: var(--ctp-yellow);
-        fill: var(--ctp-yellow);
+    @keyframes wip-pulse {
+        0%, 100% { opacity: 0.3; r: 8; }
+        50% { opacity: 0.7; r: 9; }
     }
 
     .context {
-        stroke: var(--ctp-rosewater);
-        fill: var(--ctp-rosewater);
+        filter: drop-shadow(0 0 3px currentColor);
     }
 
     .mutable {

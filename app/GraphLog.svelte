@@ -98,7 +98,7 @@
             </foreignObject>
 
             {#if row}
-                <GraphNode header={row.revision} />
+                <GraphNode header={row.revision} column={row.location[0]} />
             {/if}
         </g>
     {/each}
