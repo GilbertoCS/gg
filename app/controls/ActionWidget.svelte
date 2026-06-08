@@ -23,73 +23,65 @@
 
 <style>
     button {
-        height: 24px;
-        font-size: 16px;
-        padding: 1px 6px;
+        height: 28px;
+        font-size: 13px;
+        padding: 4px 10px;
 
         outline: none;
         margin: 0;
-        border-width: 1px;
-        border-radius: 3px;
-        border-color: var(--ctp-overlay0);
-        box-shadow: 2px 2px var(--ctp-overlay0);
+        border: 1px solid transparent;
+        border-radius: 6px;
 
         font-family: var(--stack-industrial);
         display: flex;
         align-items: center;
-        gap: 3px;
+        gap: 6px;
 
         cursor: pointer;
+        transition: all 120ms ease;
 
-        /* unthemed, but it looks good in practice and people are used to it */
-        color: black;
-        background: var(--ctp-flamingo);
+        color: var(--ctp-text);
+        background: var(--ctp-surface0);
     }
 
     button:not(:disabled) {
         &:hover {
-            background: var(--ctp-maroon);
+            background: var(--ctp-surface1);
+            border-color: var(--ctp-overlay0);
+        }
+        &:hover :global(svg) {
+            filter: drop-shadow(0 0 3px currentColor);
         }
         &:focus-visible {
             border-color: var(--ctp-lavender);
             border-width: 2px;
-            padding: 0px 5px;
-            text-decoration: underline;
+            padding: 3px 9px;
         }
         &:active {
-            margin: 1px 0px 0px 1px;
-            padding: 1px 5px 0px 6px;
-            box-shadow: 1px 1px var(--ctp-overlay0);
-            &:focus-visible {
-                padding: 1px 4px 0px 5px;
-            }
+            background: var(--ctp-surface2);
         }
     }
 
     button.safe {
         background: var(--ctp-sapphire);
+        color: white;
         &:hover {
             background: var(--ctp-teal);
         }
-        &:active {
-            border-right-color: var(--ctp-teal);
-            border-bottom-color: var(--ctp-teal);
+        &:hover :global(svg) {
+            filter: drop-shadow(0 0 3px white);
         }
     }
 
     button.secondary {
-        background: var(--ctp-surface2);
+        background: var(--ctp-surface1);
         &:hover {
-            background: var(--ctp-overlay2);
-        }
-        &:active {
-            border-right-color: var(--ctp-overlay2);
-            border-bottom-color: var(--ctp-overlay2);
+            background: var(--ctp-surface2);
         }
     }
 
     button:disabled {
-        background: var(--ctp-mantle);
-        color: var(--ctp-overlay2);
+        opacity: 0.4;
+        cursor: not-allowed;
     }
 </style>

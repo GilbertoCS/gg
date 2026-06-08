@@ -36,3 +36,6 @@ dist-ssr
 # Agent config
 .claude/settings.local.json
 .mcp.json
+
+# JJ repo
+.jj/

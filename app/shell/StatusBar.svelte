@@ -1,15 +1,9 @@
 <script lang="ts">
-    import ActionWidget from "../controls/ActionWidget.svelte";
-    import Icon from "../controls/Icon.svelte";
     import IdSpan from "../controls/IdSpan.svelte";
-    import { mutate } from "../ipc";
     import type { Operand } from "../messages/Operand";
-    import type { GitFetch } from "../messages/GitFetch";
-    import type { GitPush } from "../messages/GitPush";
-    import type { UndoOperation } from "../messages/UndoOperation";
     import type { RichHint } from "../mutators/BinaryMutator";
     import BinaryMutator from "../mutators/BinaryMutator";
-    import { ignoreToggled, currentSource, currentTarget, hasModal, repoConfigEvent, repoStatusEvent } from "../stores";
+    import { ignoreToggled, currentSource, currentTarget, hasModal, repoConfigEvent, repoStatusEvent, activeActivity } from "../stores";
     import { isTauri, trigger } from "../ipc";
     import ToggleWidget from "../controls/ToggleWidget.svelte";
     import BookmarkSpan from "../controls/BookmarkSpan.svelte";
@@ -47,64 +41,28 @@
 
         dropHint = null;
     }
-
-    function onUndo() {
-        mutate<UndoOperation>("undo_operation", null);
-    }
-
-    function onPush(remote_name: string) {
-        mutate<GitPush>(
-            "git_push",
-            { refspec: { type: "AllBookmarks", remote_name }, input: null },
-            { operation: `Pushing to ${remote_name}...` },
-        );
-    }
-
-    function onFetch(remote_name: string) {
-        mutate<GitFetch>(
-            "git_fetch",
-            { refspec: { type: "AllBookmarks", remote_name }, input: null },
-            { operation: `Fetching from ${remote_name}...` },
-        );
-    }
 </script>
 
 {#if !dropHint}
-    <div id="status-bar" class="repo-bar" inert={$hasModal}>
+    <div id="status-bar" class="repo-bar" data-activity={$activeActivity} inert={$hasModal}>
         <div class="substatus">
             <ToggleWidget tip="ignore immutability" bind:checked={$ignoreToggled} safe on="shield-off" off="shield" />
+        </div>
+        <div class="substatus path-container">
             <span id="status-workspace">
                 {$repoConfigEvent?.type == "Workspace" ? $repoConfigEvent.absolute_path : "No workspace"}
             </span>
         </div>
-        <div id="status-remotes" class="substatus">
-            {#if $repoConfigEvent?.type == "Workspace"}
-                {#each $repoConfigEvent.git_remotes as remote}
-                    <div class="substatus">
-                        <ActionWidget tip="git push (all bookmarks)" onClick={() => onPush(remote)}>
-                            <Icon name="upload-cloud" />
-                        </ActionWidget>
-                        <span>{remote}</span>
-                        <ActionWidget tip="git fetch" onClick={() => onFetch(remote)}>
-                            <Icon name="download-cloud" />
-                        </ActionWidget>
-                    </div>
-                {/each}
-            {/if}
-        </div>
-        <div id="status-operation" class="substatus">
-            <span>
+        <div class="substatus">
+            <span class="status-op">
                 {$repoConfigEvent?.type != "Workspace"
                     ? ""
                     : ($repoStatusEvent?.operation_description ?? "no operation")}
             </span>
-            <ActionWidget tip="undo latest operation" onClick={onUndo} disabled={$repoConfigEvent?.type != "Workspace"}>
-                <Icon name="rotate-ccw" /> Undo
-            </ActionWidget>
         </div>
     </div>
 {:else}
-    <div id="status-bar" class="drag-bar" class:target class:maybe>
+    <div id="status-bar" class="drag-bar" data-activity={$activeActivity} class:target class:maybe>
         <div>
             {#each dropHint as run, i}
                 {#if typeof run == "string"}
@@ -126,26 +84,43 @@
         gap: 6px;
         align-items: center;
         background:
-            linear-gradient(180deg, var(--ctp-surface0) 0%, var(--ctp-crust) 100%);
+            linear-gradient(180deg, var(--ctp-base) 0%, var(--ctp-mantle) 100%);
         border-top: 2px solid var(--ctp-overlay0);
         position: relative;
         overflow: hidden;
     }
 
-    /* Scanline overlay effect */
+    /* Subtle grid pattern overlay */
     #status-bar::before {
         content: '';
         position: absolute;
         inset: 0;
-        background: repeating-linear-gradient(
-            0deg,
-            transparent,
-            transparent 2px,
-            rgba(0, 0, 0, 0.03) 2px,
-            rgba(0, 0, 0, 0.03) 4px
-        );
+        background-image:
+            linear-gradient(var(--ctp-overlay0) 1px, transparent 1px),
+            linear-gradient(90deg, var(--ctp-overlay0) 1px, transparent 1px);
+        background-size: 20px 20px;
+        opacity: 0.05;
         pointer-events: none;
         z-index: 1;
+    }
+
+    /* Top accent bar */
+    #status-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg,
+            transparent 0%,
+            var(--accent) 20%,
+            var(--accent) 80%,
+            transparent 100%
+        );
+        box-shadow: 0 2px 8px var(--accent);
+        pointer-events: none;
+        z-index: 2;
     }
 
     .repo-bar {
@@ -178,14 +153,15 @@
         justify-content: space-evenly;
     }
 
-    #status-operation {
-        height: 100%;
-        padding: 0 3px;
-        justify-content: end;
+    .path-container {
+        flex: 1;
+        justify-content: center;
         min-width: 0;
     }
 
-    #status-operation > span {
+    .status-op {
+        font-size: 11px;
+        color: var(--ctp-subtext0);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -197,6 +173,7 @@
         text-align: left;
         overflow: hidden;
         text-overflow: ellipsis;
+        max-width: 100%;
     }
 
     .target {
@@ -208,4 +185,12 @@
         background: transparent;
         color: var(--ctp-peach);
     }
+
+    /* Activity-specific accent colors */
+    #status-bar { --accent: #ff6b9d; }
+    #status-bar[data-activity="branches"] { --accent: #00d4aa; }
+    #status-bar[data-activity="changes"] { --accent: #ffd700; }
+    #status-bar[data-activity="remotes"] { --accent: #ff8c42; }
+    #status-bar[data-activity="tags"] { --accent: #c77dff; }
+    #status-bar[data-activity="settings"] { --accent: #00b4d8; }
 </style>

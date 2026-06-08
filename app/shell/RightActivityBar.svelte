@@ -1,29 +1,25 @@
 <script lang="ts">
     import Icon from "../controls/Icon.svelte";
-    import { activeActivity, sidePanelVisible, cheatSheetVisible, activityLogVisible } from "../stores";
+    import { rightActiveActivity, rightPanelVisible, cheatSheetVisible, activityLogVisible } from "../stores";
 
     const activities = [
-        { id: "graph", icon: "activity", tip: "Graph", accent: "#ff6b9d" },
-        { id: "branches", icon: "git-branch", tip: "Branches", accent: "#00d4aa" },
-        { id: "changes", icon: "layers", tip: "Changes", accent: "#ffd700" },
-        { id: "remotes", icon: "git-pull-request", tip: "Remotes", accent: "#ff8c42" },
-        { id: "tags", icon: "tag", tip: "Tags", accent: "#c77dff" },
-        { id: "settings", icon: "settings", tip: "Settings", accent: "#00b4d8" },
+        { id: "repository", icon: "folder", tip: "Repository", accent: "#ff8c42" },
+        { id: "revision", icon: "git-commit", tip: "Revision", accent: "#00d4aa" },
     ];
 
     function setActivity(id: string) {
-        if ($activeActivity === id) {
-            sidePanelVisible.update(v => !v);
+        if ($rightActiveActivity === id) {
+            rightPanelVisible.update(v => !v);
         } else {
-            activeActivity.set(id);
-            sidePanelVisible.set(true);
+            rightActiveActivity.set(id);
+            rightPanelVisible.set(true);
         }
     }
 </script>
 
-<nav class="activity-bar" aria-label="Activity bar" style="--accent: {activities.find(a => a.id === $activeActivity)?.accent ?? '#ff6b9d'}">
+<nav class="right-activity-bar" aria-label="Right activity bar" style="--accent: {activities.find(a => a.id === $rightActiveActivity)?.accent ?? '#ff6b9d'}">
     <div class="bar-header">
-        <div class="logo-badge">gg</div>
+        <div class="logo-badge">⚡</div>
     </div>
 
     <div class="activities-container">
@@ -31,16 +27,16 @@
             <button
                 type="button"
                 class="activity-item"
-                class:active={$activeActivity === activity.id}
+                class:active={$rightActiveActivity === activity.id}
                 style="--accent: {activity.accent}"
                 title={activity.tip}
                 on:click={() => setActivity(activity.id)}
-                aria-pressed={$activeActivity === activity.id}>
+                aria-pressed={$rightActiveActivity === activity.id}>
                 <div class="item-glow"></div>
                 <div class="item-content">
                     <Icon name={activity.icon} />
                 </div>
-                {#if $activeActivity === activity.id}
+                {#if $rightActiveActivity === activity.id}
                     <div class="active-indicator"></div>
                 {/if}
             </button>
@@ -69,8 +65,8 @@
 </nav>
 
 <style>
-    .activity-bar {
-        grid-area: activity;
+    .right-activity-bar {
+        grid-area: right-activity;
         width: 56px;
         display: flex;
         flex-direction: column;
@@ -79,14 +75,14 @@
         gap: 0;
         background:
             linear-gradient(180deg, var(--ctp-base) 0%, var(--ctp-mantle) 100%);
-        border-right: 2px solid var(--ctp-overlay0);
+        border-left: 2px solid var(--ctp-overlay0);
         position: relative;
         user-select: none;
         overflow: hidden;
     }
 
     /* Subtle grid pattern overlay */
-    .activity-bar::before {
+    .right-activity-bar::before {
         content: '';
         position: absolute;
         inset: 0;
@@ -100,7 +96,7 @@
     }
 
     /* Top accent bar */
-    .activity-bar::after {
+    .right-activity-bar::after {
         content: '';
         position: absolute;
         top: 0;
@@ -131,18 +127,14 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(135deg, #ff6b9d 0%, #c77dff 50%, #00b4d8 100%);
+        background: linear-gradient(135deg, #ffd700 0%, #ff8c42 50%, #ff6b9d 100%);
         border: 2px solid var(--ctp-text);
         border-radius: 10px;
-        font-family: var(--stack-industrial);
-        font-size: 14px;
-        font-weight: 700;
-        color: white;
-        text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+        font-size: 16px;
         box-shadow:
             3px 3px 0 rgba(0,0,0,0.2),
             inset 0 1px 0 rgba(255,255,255,0.3);
-        transform: rotate(-3deg);
+        transform: rotate(3deg);
     }
 
     .activities-container {
@@ -225,13 +217,13 @@
 
     .active-indicator {
         position: absolute;
-        right: -2px;
+        left: -2px;
         top: 50%;
         transform: translateY(-50%);
         width: 3px;
         height: 24px;
         background: var(--accent);
-        border-radius: 2px 0 0 2px;
+        border-radius: 0 2px 2px 0;
         box-shadow: 0 0 8px var(--accent);
     }
 

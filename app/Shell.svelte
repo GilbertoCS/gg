@@ -30,6 +30,8 @@
     import ProgressDialog from "./shell/ProgressDialog.svelte";
     import OmniBar from "./shell/OmniBar.svelte";
     import ActivityBar from "./shell/ActivityBar.svelte";
+    import RightActivityBar from "./shell/RightActivityBar.svelte";
+    import RightSidePanel from "./shell/RightSidePanel.svelte";
     import SidePanel from "./shell/SidePanel.svelte";
     import RecentWorkspaces from "./shell/RecentWorkspaces.svelte";
     import { onMount, setContext } from "svelte";
@@ -317,7 +319,10 @@
                 </ModalOverlay>
             {/if}
             </div>
+            <RightSidePanel />
         </div>
+
+        <RightActivityBar />
 
         <div class="separator" style="grid-area: sep"></div>
 
@@ -385,12 +390,12 @@
         height: 100vh;
 
         display: grid;
-        grid-template-columns: 56px 1fr;
+        grid-template-columns: 56px 1fr 56px;
         grid-template-rows: 1fr 3px 30px;
         grid-template-areas:
-            "activity main"
-            "activity sep"
-            "activity footer";
+            "activity main right-activity"
+            "activity sep right-activity"
+            "activity footer right-activity";
 
         background: var(--ctp-crust);
         color: var(--ctp-text);

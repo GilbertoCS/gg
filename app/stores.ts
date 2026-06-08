@@ -37,6 +37,8 @@ export function dragOverWidget(event: DragEvent) {
 
 export const activeActivity = writable<string>('graph');
 export const sidePanelVisible = writable<boolean>(true);
+export const rightActiveActivity = writable<string>('graph');
+export const rightPanelVisible = writable<boolean>(true);
 export const cheatSheetVisible = writable<boolean>(false);
 
 export type LogEntry = {
