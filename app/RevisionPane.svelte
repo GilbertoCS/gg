@@ -115,6 +115,9 @@
         return Math.min(max, CONTEXT * 2 + 1);
     }
 
+    type DiffMode = "unified" | "split" | "compact";
+    let diffMode: DiffMode = "unified";
+
     function lineColour(line: string): string | null {
         if (line.startsWith("+")) {
             return "add";
@@ -123,6 +126,37 @@
         } else {
             return null;
         }
+    }
+
+    function isContextLine(line: string): boolean {
+        return !line.startsWith("+") && !line.startsWith("-");
+    }
+
+    type SplitRow = { left: string; right: string; kind: "add" | "remove" | "change" | "context" };
+
+    function splitLines(lines: string[]): SplitRow[] {
+        const result: SplitRow[] = [];
+        let i = 0;
+        while (i < lines.length) {
+            const line = lines[i];
+            if (line.startsWith("-")) {
+                const nextLine = lines[i + 1];
+                if (nextLine && nextLine.startsWith("+")) {
+                    result.push({ left: line, right: nextLine, kind: "change" });
+                    i += 2;
+                } else {
+                    result.push({ left: line, right: "", kind: "remove" });
+                    i++;
+                }
+            } else if (line.startsWith("+")) {
+                result.push({ left: "", right: line, kind: "add" });
+                i++;
+            } else {
+                result.push({ left: line, right: line, kind: "context" });
+                i++;
+            }
+        }
+        return result;
     }
 </script>
 
@@ -232,6 +266,30 @@
             <div class="move-commands">
                 <span>Changes:</span>
 
+                <div class="diff-mode-toggle">
+                    <button
+                        class="mode-btn"
+                        class:active={diffMode === "unified"}
+                        title="Unified diff"
+                        on:click={() => (diffMode = "unified")}>
+                        <Icon name="align-justify" />
+                    </button>
+                    <button
+                        class="mode-btn"
+                        class:active={diffMode === "split"}
+                        title="Split diff"
+                        on:click={() => (diffMode = "split")}>
+                        <Icon name="columns" />
+                    </button>
+                    <button
+                        class="mode-btn"
+                        class:active={diffMode === "compact"}
+                        title="Compact diff (changes only)"
+                        on:click={() => (diffMode = "compact")}>
+                        <Icon name="minimize-2" />
+                    </button>
+                </div>
+
                 <ActionWidget
                     tip="move all changes to parent"
                     onClick={mutator.onSquash}
@@ -263,9 +321,35 @@
                                     <div class="hunk">
                                         <HunkObject header={singleton ? newest : null} path={change.path} {hunk} />
                                     </div>
-                                    <pre class="diff">{#each hunk.lines.lines as line}<span class={lineColour(line)}
-                                                >{line}</span
-                                            >{/each}</pre>
+                                    {#if diffMode === "unified"}
+                                        <pre class="diff">{#each hunk.lines.lines as line}<span class={lineColour(line)}
+                                                    >{line}</span
+                                                >{/each}</pre>
+                                    {:else if diffMode === "split"}
+                                        <table class="diff diff-split">
+                                            <tbody>
+                                                {#each splitLines(hunk.lines.lines) as row}
+                                                    <tr>
+                                                        <td
+                                                            class="split-cell"
+                                                            class:remove={row.kind === "remove" || row.kind === "change"}
+                                                            class:context={row.kind === "context"}
+                                                        >{row.left ? row.left.slice(1) : ""}</td>
+                                                        <td class="split-sep"></td>
+                                                        <td
+                                                            class="split-cell"
+                                                            class:add={row.kind === "add" || row.kind === "change"}
+                                                            class:context={row.kind === "context"}
+                                                        >{row.right ? row.right.slice(1) : ""}</td>
+                                                    </tr>
+                                                {/each}
+                                            </tbody>
+                                        </table>
+                                    {:else if diffMode === "compact"}
+                                        <pre class="diff">{#each hunk.lines.lines.filter(l => !isContextLine(l)) as line}<span class={lineColour(line)}
+                                                    >{line}</span
+                                                >{/each}</pre>
+                                    {/if}
                                 {/each}
                             </div>
                         {/if}
@@ -375,9 +459,43 @@
         width: 100%;
         padding: 0 3px;
         display: grid;
-        grid-template-columns: 1fr auto auto;
+        grid-template-columns: 1fr auto auto auto;
         align-items: center;
         gap: 6px;
+    }
+
+    .diff-mode-toggle {
+        display: flex;
+        align-items: center;
+        gap: 1px;
+        background: var(--ctp-mantle);
+        border: 1px solid var(--ctp-overlay0);
+        border-radius: 4px;
+        padding: 1px;
+    }
+
+    .mode-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        background: transparent;
+        border: none;
+        border-radius: 3px;
+        color: var(--ctp-subtext0);
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .mode-btn:hover {
+        background: var(--ctp-surface0);
+        color: var(--ctp-text);
+    }
+
+    .mode-btn.active {
+        background: var(--ctp-surface1);
+        color: var(--ctp-text);
     }
 
     .move-commands > :global(button) {
@@ -455,6 +573,50 @@
 
     .remove {
         color: var(--ctp-red);
+    }
+
+    .diff-split {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: small;
+        font-family: monospace;
+    }
+
+    .diff-split td {
+        white-space: pre;
+        vertical-align: top;
+        padding: 0;
+    }
+
+    .split-cell {
+        width: 50%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .split-cell.add {
+        background: color-mix(in srgb, var(--ctp-green) 15%, var(--ctp-base));
+        color: var(--ctp-green);
+    }
+
+    .split-cell.remove {
+        background: color-mix(in srgb, var(--ctp-red) 15%, var(--ctp-base));
+        color: var(--ctp-red);
+    }
+
+    .split-cell.context {
+        color: var(--ctp-subtext0);
+    }
+
+    .split-sep {
+        width: 2px;
+        min-width: 2px;
+        background: var(--ctp-overlay0);
+        padding: 0 !important;
+    }
+
+    .diff-split tr {
+        line-height: 1.4;
     }
 
     .target {
