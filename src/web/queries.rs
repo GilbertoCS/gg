@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use crate::messages::{
     RepoConfig, RepoStatus, RevId, RevSet, TreePath,
-    queries::{ConflictSlicesResponse, LogPage, RevsResult},
+    queries::{ConflictResolutionReview, ConflictSlicesResponse, LogPage, RevsResult},
 };
 use crate::worker::SessionEvent;
 
@@ -23,6 +23,10 @@ pub fn router() -> Router<AppState> {
         .route("/query_revisions", post(query_revisions))
         .route("/query_remotes", post(query_remotes))
         .route("/query_conflict_slices", post(query_conflict_slices))
+        .route(
+            "/query_conflict_resolution_review",
+            post(query_conflict_resolution_review),
+        )
         .route("/query_recent_workspaces", post(query_recent_workspaces))
         .route("/query_snapshot", post(query_snapshot))
 }
@@ -159,6 +163,22 @@ async fn query_conflict_slices(
         revision_id: req.revision_id,
         path: req.path,
     })?;
+    let result = rx.recv()??;
+    Ok(Json(result))
+}
+
+async fn query_conflict_resolution_review(
+    State(state): State<AppState>,
+    Json(req): Json<QueryConflictSlices>,
+) -> Result<Json<Option<ConflictResolutionReview>>, ApiError> {
+    let (tx, rx) = channel();
+    state
+        .worker_tx
+        .send(SessionEvent::QueryConflictResolutionReview {
+            tx,
+            revision_id: req.revision_id,
+            path: req.path,
+        })?;
     let result = rx.recv()??;
     Ok(Json(result))
 }

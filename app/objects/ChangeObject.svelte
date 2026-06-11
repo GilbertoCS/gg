@@ -12,6 +12,7 @@
     import { mutate } from "../ipc";
     import ActionLink from "../controls/ActionLink.svelte";
     import ConflictResolverModal from "../shell/ConflictResolverModal.svelte";
+    import ConflictResolutionReviewModal from "../shell/ConflictResolutionReviewModal.svelte";
 
     export let headers: RevHeader[] | null;
     export let change: RevChange;
@@ -61,10 +62,16 @@
 
     // Inline conflict resolver state
     let isResolverOpen = false;
+    let isReviewOpen = false;
 
     function onInlineResolve() {
         if (!headers || !change.has_conflict) return;
         isResolverOpen = true;
+    }
+
+    function onReviewResolution() {
+        if (!headers || change.has_conflict) return;
+        isReviewOpen = true;
     }
 </script>
 
@@ -90,6 +97,15 @@
                         <Icon name="external-link" />
                     </ActionWidget>
                 {/if}
+            {:else if operand && change.kind === "Modified"}
+                <ActionWidget tip="review conflict resolution" onClick={onReviewResolution}>
+                    <Icon name="history" />
+                </ActionWidget>
+                {#if hasDiffTool}
+                    <ActionLink tip="open in diff tool" onClick={onExternalDiff}>
+                        <Icon name="external-link" />
+                    </ActionLink>
+                {/if}
             {:else if hasDiffTool && operand}
                 <ActionLink tip="open in diff tool" onClick={onExternalDiff}>
                     <Icon name="external-link" />
@@ -101,6 +117,12 @@
 
 <ConflictResolverModal
     bind:isOpen={isResolverOpen}
+    revisionId={headers?.[0]?.id ?? null}
+    path={change.path}
+/>
+
+<ConflictResolutionReviewModal
+    bind:isOpen={isReviewOpen}
     revisionId={headers?.[0]?.id ?? null}
     path={change.path}
 />

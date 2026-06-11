@@ -83,6 +83,19 @@ pub struct ConflictSlicesResponse {
     pub regions: Vec<ConflictRegion>,
 }
 
+/// Read-only data for reviewing how a conflicted parent file was resolved.
+#[derive(Serialize, Debug)]
+#[cfg_attr(feature = "ts-rs", derive(TS), ts(export, export_to = "app/messages/"))]
+pub struct ConflictResolutionReview {
+    pub path: TreePath,
+    pub revision_id: RevId,
+    pub parent_id: RevId,
+    pub ours_label: String,
+    pub theirs_label: String,
+    pub regions: Vec<ConflictRegion>,
+    pub resolved_content: MultilineString,
+}
+
 /// The type of modification made to a file in a diff.
 #[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "ts-rs", derive(TS), ts(export, export_to = "app/messages/"))]

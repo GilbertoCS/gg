@@ -288,6 +288,42 @@ async fn conflict_slices_return_structured_regions() -> Result<()> {
 /// Test that resolving a conflict results in no conflicts in the final tree.
 /// The diff shows removal of labeled conflict markers from the parent tree.
 #[tokio::test]
+async fn conflict_resolution_review_uses_parent_conflict() -> Result<()> {
+    let repo = mkrepo();
+
+    let mut session = WorkerSession::default();
+    let ws = session.load_workspace(repo.path()).await?;
+
+    let conflict_id = revs::conflict_bookmark();
+    let conflict_result = queries::query_revisions(
+        &ws,
+        RevSet {
+            from: conflict_id.clone(),
+            to: conflict_id,
+        },
+    )
+    .await?;
+    let RevsResult::Detail { conflicts, .. } = conflict_result else {
+        panic!("Expected RevsResult::Detail");
+    };
+    let conflict_path = conflicts
+        .first()
+        .expect("fixture should contain a conflicted file")
+        .path
+        .clone();
+
+    let resolved_id = revs::resolve_conflict();
+    let review = queries::query_conflict_resolution_review(&ws, &resolved_id, &conflict_path)
+        .await?
+        .expect("resolved child should have parent conflict review data");
+
+    assert_eq!(conflict_path.repo_path, review.path.repo_path);
+    assert!(!review.regions.is_empty());
+    assert!(!review.resolved_content.lines.is_empty());
+
+    Ok(())
+}
+#[tokio::test]
 async fn revision_resolves_conflict() -> Result<()> {
     let repo = mkrepo();
 

@@ -86,6 +86,12 @@ pub enum SessionEvent {
         revision_id: messages::RevId,
         path: messages::TreePath,
     },
+    /// Query read-only data for reviewing a resolved conflict.
+    QueryConflictResolutionReview {
+        tx: Sender<Result<Option<messages::queries::ConflictResolutionReview>>>,
+        revision_id: messages::RevId,
+        path: messages::TreePath,
+    },
     /// Start a new log query with the given revset string.
     QueryLog {
         tx: Sender<Result<messages::queries::LogPage>>,
@@ -291,6 +297,13 @@ impl Session for WorkspaceSession<'_> {
                 } => {
                     tx.send(queries::query_conflict_slices(&self, &revision_id, &path).await)?;
                 }
+                SessionEvent::QueryConflictResolutionReview {
+                    tx,
+                    revision_id,
+                    path,
+                } => tx.send(
+                    queries::query_conflict_resolution_review(&self, &revision_id, &path).await,
+                )?,
                 SessionEvent::QueryLog {
                     tx,
                     query: revset_string,

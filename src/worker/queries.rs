@@ -768,6 +768,53 @@ pub async fn query_conflict_slices(
     }
 }
 
+pub async fn query_conflict_resolution_review(
+    ws: &WorkspaceSession<'_>,
+    revision_id: &RevId,
+    path: &TreePath,
+) -> Result<Option<ConflictResolutionReview>> {
+    let commit = ws.resolve_commit_id(&revision_id.commit)?;
+    let parent_id = match commit.parent_ids() {
+        [parent_id] => parent_id,
+        _ => return Ok(None),
+    };
+    let parent = ws.get_commit(parent_id)?;
+    let parent_rev_id = ws.format_header(&parent, None)?.id;
+
+    let repo_path = RepoPath::from_internal_string(&path.repo_path)?;
+    let parent_entry = parent.tree().path_value(&repo_path).await?;
+    if parent_entry.is_resolved() {
+        return Ok(None);
+    }
+
+    let conflict = query_conflict_slices(ws, &parent_rev_id, path).await?;
+
+    let current_materialized = conflicts::materialize_tree_value(
+        ws.repo().store(),
+        &repo_path,
+        commit.tree().path_value(&repo_path).await?,
+        commit.tree().labels(),
+    )
+    .await?;
+    let resolved_content =
+        String::from_utf8_lossy(&get_value_contents(&repo_path, current_materialized).await?)
+            .lines()
+            .map(ToOwned::to_owned)
+            .collect();
+
+    Ok(Some(ConflictResolutionReview {
+        path: path.clone(),
+        revision_id: revision_id.clone(),
+        parent_id: parent_rev_id,
+        ours_label: conflict.ours_label,
+        theirs_label: conflict.theirs_label,
+        regions: conflict.regions,
+        resolved_content: MultilineString {
+            lines: resolved_content,
+        },
+    }))
+}
+
 /// Split materialized Git-marker content into ordered regions.
 ///
 /// Text outside markers becomes `Stable` regions (shared by both sides). Each
