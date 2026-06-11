@@ -368,6 +368,10 @@ async fn revision_resolves_conflict() -> Result<()> {
 
     // There should be at least one change (the conflict resolution)
     assert!(!changes.is_empty(), "Expected at least one change");
+    assert!(
+        changes.iter().any(|change| change.has_resolved_conflict),
+        "Expected at least one change to be marked as a resolved conflict"
+    );
 
     // Find the change for the file that had the conflict
     // The diff shows going FROM conflicted parent TO resolved commit

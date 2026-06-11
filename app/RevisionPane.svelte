@@ -66,6 +66,7 @@
                 kind: "None",
                 path: conflict.path,
                 has_conflict: true,
+                has_resolved_conflict: false,
                 hunks: [conflict.hunk],
             })),
         )

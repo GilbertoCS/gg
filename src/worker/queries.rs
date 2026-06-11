@@ -495,6 +495,7 @@ async fn format_tree_changes(
         };
 
         let has_conflict = !after.is_resolved();
+        let has_resolved_conflict = !before.is_resolved() && after.is_resolved();
 
         let before_future =
             conflicts::materialize_tree_value(store, &path, before.clone(), conflict_labels.before);
@@ -508,6 +509,7 @@ async fn format_tree_changes(
             path: ws.format_path(path)?,
             kind,
             has_conflict,
+            has_resolved_conflict,
             hunks,
         });
     }

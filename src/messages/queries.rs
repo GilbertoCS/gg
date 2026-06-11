@@ -10,6 +10,7 @@ pub struct RevChange {
     pub kind: ChangeKind,
     pub path: TreePath,
     pub has_conflict: bool,
+    pub has_resolved_conflict: bool,
     pub hunks: Vec<ChangeHunk>,
 }
 

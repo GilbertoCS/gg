@@ -97,7 +97,7 @@
                         <Icon name="external-link" />
                     </ActionWidget>
                 {/if}
-            {:else if operand && change.kind === "Modified"}
+            {:else if operand && change.has_resolved_conflict}
                 <ActionWidget tip="review conflict resolution" onClick={onReviewResolution}>
                     <Icon name="history" />
                 </ActionWidget>
