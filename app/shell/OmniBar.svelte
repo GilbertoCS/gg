@@ -1,23 +1,97 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
     import Icon from "../controls/Icon.svelte";
-    import { selectionHeaders, revisionSelectEvent } from "../stores";
+    import { selectionHeaders, graphHeaders, graphRevset, graphPresets, presetActions, revisionSelectEvent, repoConfigEvent, ignoreToggled } from "../stores";
+    import { mutate, getInput } from "../ipc";
+    import RevisionMutator from "../mutators/RevisionMutator";
     import type { RevHeader } from "../messages/RevHeader";
+    import type { GitFetch } from "../messages/GitFetch";
+    import type { GitPush } from "../messages/GitPush";
+    import type { UndoOperation } from "../messages/UndoOperation";
 
     let expanded = false;
     let query = "";
     let inputEl: HTMLInputElement;
     let selectedIdx = 0;
 
-    type Result = { type: "commit" | "bookmark" | "tag" | "revset"; label: string; sublabel: string; header?: RevHeader };
+    type Result = {
+        type: "commit" | "bookmark" | "tag" | "revset" | "preset" | "command";
+        label: string;
+        sublabel: string;
+        header?: RevHeader;
+        revset?: string;
+        run?: () => void;
+    };
 
-    $: results = computeResults(query, $selectionHeaders);
+    // ── command palette actions ───────────────────────────────────────────────
+    $: remotes = $repoConfigEvent?.type === "Workspace" ? $repoConfigEvent.git_remotes : [];
+    $: hasWorkspace = $repoConfigEvent?.type === "Workspace";
+    $: mutator = $selectionHeaders.length > 0 ? new RevisionMutator($selectionHeaders, $ignoreToggled) : null;
 
-    function computeResults(q: string, headers: RevHeader[]): Result[] {
-        if (!q.trim()) return [];
-        const lq = q.toLowerCase();
+    function doPush() {
+        for (const remote of remotes) {
+            mutate<GitPush>("git_push", { refspec: { type: "AllBookmarks", remote_name: remote }, input: null }, { operation: `Pushing to ${remote}...` });
+        }
+    }
+    function doFetch() {
+        for (const remote of remotes) {
+            mutate<GitFetch>("git_fetch", { refspec: { type: "AllBookmarks", remote_name: remote }, input: null }, { operation: `Fetching from ${remote}...` });
+        }
+    }
+    function doUndo() {
+        mutate<UndoOperation>("undo_operation", null);
+    }
+    async function doDescribe() {
+        if (!mutator || $selectionHeaders.length !== 1) return;
+        const current = $selectionHeaders[0].description.lines.join("\n");
+        const response = await getInput("Describe Revision", "code:" + current, ["Description"]);
+        if (response) mutator.onDescribe(response["Description"], false);
+    }
+
+    type Command = { key: string; aliases?: string[]; label: string; icon: string; enabled: () => boolean; run: () => void };
+    $: commands = [
+        { key: "push", label: "Push all remotes", icon: "upload-cloud", enabled: () => remotes.length > 0, run: doPush },
+        { key: "fetch", aliases: ["pull"], label: "Fetch all remotes", icon: "download-cloud", enabled: () => remotes.length > 0, run: doFetch },
+        { key: "new", aliases: ["child"], label: "New child of selection", icon: "plus", enabled: () => !!mutator, run: () => mutator?.onNewChild() },
+        { key: "edit", label: "Edit selected revision", icon: "edit-3", enabled: () => $selectionHeaders.length === 1 && !$selectionHeaders[0].is_working_copy, run: () => mutator?.onEdit() },
+        { key: "describe", label: "Describe selected revision", icon: "edit-3", enabled: () => $selectionHeaders.length === 1, run: doDescribe },
+        { key: "squash", label: "Squash selection into parent", icon: "minimize-2", enabled: () => !!mutator, run: () => mutator?.onSquash() },
+        { key: "duplicate", label: "Duplicate selection", icon: "copy", enabled: () => !!mutator, run: () => mutator?.onDuplicate() },
+        { key: "abandon", label: "Abandon selection", icon: "trash-2", enabled: () => !!mutator, run: () => mutator?.onAbandon() },
+        { key: "undo", label: "Undo last operation", icon: "rotate-ccw", enabled: () => hasWorkspace, run: doUndo },
+        { key: "save-preset", aliases: ["preset"], label: "Save current revset as preset", icon: "save", enabled: () => !!$presetActions?.isCustom, run: () => $presetActions?.saveCurrent() },
+        { key: "delete-preset", aliases: ["preset"], label: "Delete current revset preset", icon: "x-square", enabled: () => !!$presetActions?.isDeletable, run: () => $presetActions?.deleteCurrent() },
+    ] satisfies Command[];
+
+    $: results = computeResults(query, $graphHeaders, commands, $graphPresets);
+
+    function computeResults(q: string, headers: RevHeader[], cmds: Command[], presets: { label: string; value: string }[]): Result[] {
+        const trimmed = q.trim();
+
+        // command mode: "/" or ">" prefix
+        if (trimmed[0] === "/" || trimmed[0] === ">") {
+            const term = trimmed.slice(1).trim().toLowerCase();
+            return cmds
+                .filter((c) => c.enabled())
+                .filter((c) => !term || c.key.includes(term) || (c.aliases ?? []).some((a) => a.includes(term)) || c.label.toLowerCase().includes(term))
+                .map((c) => ({ type: "command" as const, label: c.label, sublabel: "/" + c.key, run: c.run }));
+        }
+
+        // empty input: offer preset revsets as quick switches
+        if (!trimmed) {
+            return presets.map((p) => ({ type: "preset" as const, label: p.label, sublabel: p.value, revset: p.value }));
+        }
+
+        const lq = trimmed.toLowerCase();
         const out: Result[] = [];
         const seen = new Set<string>();
+
+        // matching presets first
+        for (const p of presets) {
+            if (p.label.toLowerCase().includes(lq) || p.value.toLowerCase().includes(lq)) {
+                out.push({ type: "preset", label: p.label, sublabel: p.value, revset: p.value });
+            }
+        }
 
         for (const h of headers) {
             if (out.length >= 15) break;
@@ -47,10 +121,8 @@
             }
         }
 
-        // always offer to run as a revset query
-        if (out.length === 0 || q.includes("(") || q.includes("|") || q.includes("&") || q.includes("::")) {
-            out.push({ type: "revset", label: `Run revset: ${q}`, sublabel: "query" });
-        }
+        // always offer to run the text as a revset query that filters the graph
+        out.push({ type: "revset", label: `Filter graph: ${trimmed}`, sublabel: "revset" });
 
         return out;
     }
@@ -71,7 +143,14 @@
     }
 
     function selectResult(r: Result) {
-        if (r.header) {
+        if (r.type === "command" && r.run) {
+            r.run();
+        } else if (r.type === "preset") {
+            if (r.revset) graphRevset.set(r.revset);
+        } else if (r.type === "revset") {
+            const revset = query.trim();
+            if (revset) graphRevset.set(revset);
+        } else if (r.header) {
             revisionSelectEvent.set({ from: r.header.id, to: r.header.id });
         }
         close();
@@ -118,7 +197,7 @@
                 <input
                     bind:this={inputEl}
                     bind:value={query}
-                    placeholder="Search commits, bookmarks, or type a revset..."
+                    placeholder="Search, type a revset, or / for commands..."
                     on:keydown={handleInputKeydown}
                 />
                 <span class="shortcut-hint">ESC</span>
@@ -128,7 +207,7 @@
                     {#each results as r, i}
                         <li class:selected={i === selectedIdx}>
                             <button type="button" on:click={() => selectResult(r)} on:mouseenter={() => selectedIdx = i}>
-                                <Icon name={r.type === "bookmark" ? "git-branch" : r.type === "tag" ? "tag" : r.type === "revset" ? "terminal" : "git-commit"} />
+                                <Icon name={r.type === "bookmark" ? "git-branch" : r.type === "tag" ? "tag" : r.type === "revset" ? "filter" : r.type === "preset" ? "bookmark" : r.type === "command" ? "terminal" : "git-commit"} />
                                 <span class="result-label">{r.label}</span>
                                 <span class="result-sub">{r.sublabel}</span>
                             </button>
@@ -139,7 +218,7 @@
                 <div class="omnibar-empty">No results found</div>
             {/if}
             <div class="omnibar-hints">
-                <span><kbd>↑↓</kbd> navigate · <kbd>↵</kbd> select · <kbd>Esc</kbd> close</span>
+                <span><kbd>↑↓</kbd> navigate · <kbd>↵</kbd> select · <kbd>/</kbd> commands · <kbd>Esc</kbd> close</span>
             </div>
         </div>
     {:else}

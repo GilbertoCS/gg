@@ -6,13 +6,9 @@
     import type { RevSet } from "./messages/RevSet";
     import { getInput, query, trigger } from "./ipc.js";
     import { sameChange } from "./ids.js";
-    import { ignoreToggled, repoStatusEvent, revisionSelectEvent, zoomLevel } from "./stores.js";
+    import { ignoreToggled, repoStatusEvent, revisionSelectEvent, zoomLevel, graphHeaders, graphRevset, graphPresets, currentRevset, presetActions, hasModal } from "./stores.js";
     import RevisionMutator from "./mutators/RevisionMutator.js";
-    import Pane from "./shell/Pane.svelte";
     import RevisionObject from "./objects/RevisionObject.svelte";
-    import ActionWidget from "./controls/ActionWidget.svelte";
-    import Icon from "./controls/Icon.svelte";
-    import SelectWidget from "./controls/SelectWidget.svelte";
     import ListWidget, { type List, type Selection } from "./controls/ListWidget.svelte";
     import { type EnhancedRow, default as GraphLog, type EnhancedLine } from "./GraphLog.svelte";
 
@@ -48,7 +44,6 @@
         return result;
     })();
 
-    let choices: ReturnType<typeof getChoices>;
     let entered_query = latest_query;
     let graphRows: EnhancedRow[] | undefined;
 
@@ -125,8 +120,25 @@
         loadLog(true);
     });
 
-    $: choices = getChoices(entered_query, presets);
     $: if ($repoStatusEvent) reloadLog();
+
+    // publish the full visible log so other components (OmniBar, SidePanel) can use it
+    $: graphHeaders.set((graphRows ?? []).map((r) => r.revision));
+
+    // publish revset state + preset controls so the OmniBar is the single query entry point
+    $: currentRevset.set(entered_query);
+    $: graphPresets.set(presets.filter((p) => !p.separator).map((p) => ({ label: p.label, value: p.value })));
+    $: presetActions.set({ saveCurrent: handleSavePreset, deleteCurrent: handleDeletePreset, isCustom, isDeletable });
+
+    // apply a revset requested from outside (e.g. the OmniBar command palette)
+    $: if ($graphRevset != null) applyExternalRevset($graphRevset);
+    function applyExternalRevset(revset: string) {
+        graphRevset.set(null);
+        if (revset !== entered_query) {
+            entered_query = revset;
+            reloadLog();
+        }
+    }
 
     function isInSelectedRange(row: EnhancedRow, selection: typeof $revisionSelectEvent): boolean {
         if (!selection || !graphRows) return false;
@@ -208,16 +220,6 @@
 
         const limitIdx = findLinearLimit(selectionAnchorIdx, clickedIdx);
         setSelection(undefined, limitIdx); // keep anchor, extend to limit
-    }
-
-    function getChoices(query: string, presetList: typeof presets) {
-        for (let choice of presetList) {
-            if (query == choice.value) {
-                return presetList;
-            }
-        }
-
-        return [{ label: "Custom", value: query }, ...presetList];
     }
 
     $: isCustom = !presets.some((p) => !p.separator && p.value === entered_query);
@@ -377,24 +379,8 @@
     }
 </script>
 
-<Pane>
-    <div slot="header" class="log-selector" class:editable={isCustom || isDeletable}>
-        <SelectWidget options={choices} bind:value={entered_query} on:change={reloadLog}>
-            <svelte:fragment let:option>{option.label}</svelte:fragment>
-        </SelectWidget>
-        <input type="text" bind:value={entered_query} on:change={reloadLog} />
-        {#if isCustom}
-            <ActionWidget secondary tip="Save revset" onClick={handleSavePreset}>
-                <Icon name="save" />
-            </ActionWidget>
-        {:else if isDeletable}
-            <ActionWidget secondary tip="Delete revset" onClick={handleDeletePreset}>
-                <Icon name="x-square" />
-            </ActionWidget>
-        {/if}
-    </div>
-
-    <div slot="body" class="graph-body">
+<section class="log-pane" inert={$hasModal}>
+    <div class="graph-body">
         <div class="column-headers">
             <span class="col-graph">Graph</span>
             <span class="col-desc">Description</span>
@@ -430,28 +416,15 @@
             {/if}
         </ListWidget>
     </div>
-</Pane>
+</section>
 
 <style>
-    .log-selector {
-        height: 100%;
+    .log-pane {
         display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 3px;
-
-        &.editable {
-            grid-template-columns: auto 1fr auto;
-            & > :global(*:last-child) {
-                height: unset;
-                align-self: stretch;
-                padding: 1px 3px;
-            }
-        }
-    }
-
-    input {
-        font-family: var(--stack-code);
-        font-size: 14px;
+        grid-template-rows: 100%;
+        grid-template-columns: 100%;
+        overflow: hidden;
+        height: 100%;
     }
 
     .zoom-wrapper {

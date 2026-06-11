@@ -47,7 +47,8 @@ use crate::messages::mutations::{
     CreateRef, CreateRevision, CreateRevisionBetween, DeleteRef, DescribeRevision,
     DuplicateRevisions, ExternalDiff, ExternalResolve, ForgetWorkspace, GitFetch, GitPush,
     InsertRevisions, MoveChanges, MoveHunk, MoveRef, MoveRevisions, MutationOptions,
-    RenameBookmark, RenameWorkspace, ResolveConflict, TrackBookmark, UndoOperation, UntrackBookmark,
+    RenameBookmark, RenameWorkspace, ResolveConflict, TrackBookmark, UndoOperation,
+    UntrackBookmark,
 };
 use crate::worker::{Mutation, Session, SessionEvent, WorkerSession};
 use sink::{SseEvent, SseSink};

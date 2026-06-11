@@ -2,8 +2,4 @@
 import type { RevId } from "./RevId";
 import type { TreePath } from "./TreePath";
 
-export interface ResolveConflict {
-    id: RevId;
-    path: TreePath;
-    resolved_content: string;
-}
+export interface ResolveConflict { id: RevId, path: TreePath, resolved_content: string, }

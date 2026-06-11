@@ -30,6 +30,27 @@ export const ignoreToggled = writable<boolean>(false);
 
 export const selectionHeaders = writable<RevHeader[]>([]);
 
+// all revisions currently rendered in the graph (full visible log)
+export const graphHeaders = writable<RevHeader[]>([]);
+
+// a revset requested from outside the LogPane (e.g. the OmniBar) to filter the graph.
+// LogPane applies it and resets this back to null.
+export const graphRevset = writable<string | null>(null);
+
+// the revset preset choices, published by LogPane for the OmniBar to offer.
+export const graphPresets = writable<{ label: string; value: string }[]>([]);
+
+// the revset currently applied to the graph, published by LogPane.
+export const currentRevset = writable<string>("");
+
+// preset management callbacks, registered by LogPane so the OmniBar can drive them.
+export const presetActions = writable<{
+    saveCurrent: () => void;
+    deleteCurrent: () => void;
+    isCustom: boolean;
+    isDeletable: boolean;
+} | null>(null);
+
 export function dragOverWidget(event: DragEvent) {
     event.stopPropagation();
     currentTarget.set(null);

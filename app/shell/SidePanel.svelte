@@ -1,5 +1,5 @@
 ﻿<script lang="ts">
-    import { sidePanelVisible, repoConfigEvent, selectionHeaders, revisionSelectEvent, highlightedBranch, ignoreToggled } from "../stores";
+    import { sidePanelVisible, repoConfigEvent, selectionHeaders, graphHeaders, revisionSelectEvent, highlightedBranch, ignoreToggled } from "../stores";
     import Icon from "../controls/Icon.svelte";
     import { mutate } from "../ipc";
     import type { GitFetch } from "../messages/GitFetch";
@@ -53,6 +53,13 @@
 
     function checkout(header: RevHeader) {
         revisionSelectEvent.set({ from: header.id, to: header.id });
+    }
+
+    function editRevision(header: RevHeader) {
+        revisionSelectEvent.set({ from: header.id, to: header.id });
+        if (!header.is_working_copy) {
+            new RevisionMutator([header], $ignoreToggled).onEdit();
+        }
     }
 
     function onFetch(remote_name: string) {
@@ -111,8 +118,8 @@
     }
 
     $: workspace = $repoConfigEvent?.type === "Workspace" ? $repoConfigEvent : null;
-    $: localBranches = allLocalBookmarks($selectionHeaders);
-    $: tags = allTags($selectionHeaders);
+    $: localBranches = allLocalBookmarks($graphHeaders);
+    $: tags = allTags($graphHeaders);
     $: mutator = $selectionHeaders.length > 0 ? new RevisionMutator($selectionHeaders, $ignoreToggled) : null;
     $: revisionEnabled = $selectionHeaders.length > 0 ? isRevisionEnabled($selectionHeaders, $ignoreToggled) : null;
 </script>
@@ -149,8 +156,9 @@
                                     type="button"
                                     class="branch-item"
                                     class:wc={header.is_working_copy}
-                                    title={shortDesc(header)}
+                                    title={`${shortDesc(header)}\n(double-click to edit)`}
                                     on:click={() => checkout(header)}
+                                    on:dblclick={() => editRevision(header)}
                                     on:mouseenter={() => highlightedBranch.set(ref.bookmark_name)}
                                     on:mouseleave={() => highlightedBranch.set(null)}>
                                     <Icon name="git-branch" />
@@ -209,7 +217,7 @@
                         {:else}
                             {#each tags as { ref, header }}
                                 <li>
-                                    <button type="button" class="branch-item" title={shortDesc(header)} on:click={() => checkout(header)}>
+                                    <button type="button" class="branch-item" title={`${shortDesc(header)}\n(double-click to edit)`} on:click={() => checkout(header)} on:dblclick={() => editRevision(header)}>
                                         <Icon name="tag" />
                                         <span class="branch-name">{ref.tag_name}</span>
                                     </button>

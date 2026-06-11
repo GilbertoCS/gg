@@ -17,15 +17,15 @@ use jj_cli::{
 use jj_lib::{
     backend::{CommitId, CopyId, TreeValue},
     conflicts::{self, ConflictMarkerStyle, ConflictMaterializeOptions, MaterializedTreeValue},
-    merge::Merge,
-    merged_tree::MergedTree,
-    merged_tree_builder::MergedTreeBuilder,
     files::FileMergeHunkLevel,
     git::{
         self, GitFetchRefExpression, GitPushOptions, GitPushRefTargets, GitSettings,
         GitSubprocessOptions, REMOTE_NAME_FOR_LOCAL_GIT_REPO,
     },
+    merge::Merge,
     merge::{Diff, SameChange},
+    merged_tree::MergedTree,
+    merged_tree_builder::MergedTreeBuilder,
     object_id::ObjectId as ObjectIdTrait,
     op_walk,
     ref_name::WorkspaceNameBuf,
@@ -224,15 +224,15 @@ impl Mutation for ResolveConflict {
         // Write the resolved content as a new file
         let mut tx = ws.start_transaction().await?;
         let store = tx.repo().store();
-        
+
         // Create a new file with the resolved content
         let file_id = store
             .write_file(&repo_path, &mut self.resolved_content.as_bytes())
             .await?;
 
         // Create a resolved TreeValue::File using Merge::normal
-        let resolved_value = Merge::normal(TreeValue::File { 
-            id: file_id, 
+        let resolved_value = Merge::normal(TreeValue::File {
+            id: file_id,
             executable: false, // Preserve original executable bit if possible
             copy_id: CopyId::placeholder(),
         });
