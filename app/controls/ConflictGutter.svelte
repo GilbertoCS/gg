@@ -1,9 +1,9 @@
 <script lang="ts">
-    import type { ConflictSlice } from "../lib/ThreeSide";
-    import { ConflictType, ThreeSide } from "../lib/ThreeSide";
+    import type { ConflictRegion } from "../lib/ThreeSide";
+    import { ThreeSide } from "../lib/ThreeSide";
     import Icon from "./Icon.svelte";
 
-    export let slices: ConflictSlice[];
+    export let regions: ConflictRegion[];
     export let onAccept: (conflictIndex: number, side: ThreeSide) => void;
     
     // Track which conflicts have been resolved
@@ -19,15 +19,17 @@
         return resolvedIndices.has(index);
     }
 
-    function getConflictClass(type: ConflictType): string {
+    $: conflicts = regions.filter((region) => region.kind !== "Stable");
+
+    function getConflictClass(type: ConflictRegion["kind"]): string {
         switch (type) {
-            case ConflictType.Conflict:
+            case "Conflict":
                 return "conflict";
-            case ConflictType.LeftChange:
+            case "LeftChange":
                 return "left-change";
-            case ConflictType.RightChange:
+            case "RightChange":
                 return "right-change";
-            case ConflictType.IdenticalChange:
+            case "IdenticalChange":
                 return "identical";
             default:
                 return "";
@@ -39,25 +41,26 @@
     <div class="gutter-header">
         <span>Conflicts</span>
         <span class="counter">
-            {resolvedIndices.size} / {slices.length} resolved
+            {resolvedIndices.size} / {conflicts.length} resolved
         </span>
     </div>
     <div class="gutter-content">
-        {#each slices as slice, index}
+        {#each conflicts as region, index}
+            {@const conflictId = region.conflict_index ?? index}
             <div 
-                class="conflict-item {getConflictClass(slice.conflictType)}"
-                class:resolved={isResolved(index)}
+                class="conflict-item {getConflictClass(region.kind)}"
+                class:resolved={isResolved(conflictId)}
             >
                 <div class="conflict-info">
-                    <span class="conflict-number">#{slice.index + 1}</span>
-                    <span class="conflict-type">{slice.conflictType}</span>
+                    <span class="conflict-number">#{conflictId + 1}</span>
+                    <span class="conflict-type">{region.kind}</span>
                 </div>
                 
                 <div class="action-buttons">
-                    {#if slice.conflictType !== ConflictType.RightChange && !isResolved(index)}
+                    {#if region.kind !== "RightChange" && !isResolved(conflictId)}
                         <button
                             class="accept-btn accept-left"
-                            on:click={() => handleAccept(index, ThreeSide.LEFT)}
+                            on:click={() => handleAccept(conflictId, ThreeSide.LEFT)}
                             title="Accept Ours (left side)"
                         >
                             <Icon name="arrow-left-circle" />
@@ -65,10 +68,10 @@
                         </button>
                     {/if}
                     
-                    {#if slice.conflictType !== ConflictType.LeftChange && !isResolved(index)}
+                    {#if region.kind !== "LeftChange" && !isResolved(conflictId)}
                         <button
                             class="accept-btn accept-right"
-                            on:click={() => handleAccept(index, ThreeSide.RIGHT)}
+                            on:click={() => handleAccept(conflictId, ThreeSide.RIGHT)}
                             title="Accept Theirs (right side)"
                         >
                             <span>Theirs</span>
@@ -76,7 +79,7 @@
                         </button>
                     {/if}
                     
-                    {#if isResolved(index)}
+                    {#if isResolved(conflictId)}
                         <span class="resolved-badge">
                             <Icon name="check-circle" />
                             Resolved

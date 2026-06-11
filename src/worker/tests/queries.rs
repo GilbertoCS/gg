@@ -235,6 +235,56 @@ async fn revision_without_conflict() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn conflict_slices_return_structured_regions() -> Result<()> {
+    let repo = mkrepo();
+
+    let mut session = WorkerSession::default();
+    let ws = session.load_workspace(repo.path()).await?;
+
+    let id = revs::conflict_bookmark();
+    let result = queries::query_revisions(
+        &ws,
+        RevSet {
+            from: id.clone(),
+            to: id.clone(),
+        },
+    )
+    .await?;
+
+    let RevsResult::Detail { conflicts, .. } = result else {
+        panic!("Expected RevsResult::Detail");
+    };
+    let conflict_path = conflicts
+        .first()
+        .expect("fixture should contain a conflicted file")
+        .path
+        .clone();
+
+    let response = queries::query_conflict_slices(&ws, &id, &conflict_path).await?;
+    assert_eq!(conflict_path.repo_path, response.path.repo_path);
+    assert!(
+        !response.regions.is_empty(),
+        "expected structured conflict regions"
+    );
+    assert!(
+        response
+            .regions
+            .iter()
+            .any(|region| region.kind == crate::messages::queries::ConflictType::Conflict),
+        "expected at least one conflict region"
+    );
+    assert!(
+        response
+            .regions
+            .iter()
+            .filter(|region| region.kind != crate::messages::queries::ConflictType::Stable)
+            .all(|region| region.conflict_index.is_some()),
+        "all non-stable regions should have conflict indexes"
+    );
+
+    Ok(())
+}
 /// Test that resolving a conflict results in no conflicts in the final tree.
 /// The diff shows removal of labeled conflict markers from the parent tree.
 #[tokio::test]

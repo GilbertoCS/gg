@@ -30,9 +30,11 @@ pub struct ConflictSide {
 }
 
 /// Type of merge conflict.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 #[cfg_attr(feature = "ts-rs", derive(TS), ts(export, export_to = "app/messages/"))]
 pub enum ConflictType {
+    /// Identical on both sides; auto-applied to the result without user input
+    Stable,
     /// Both sides modified the same region
     Conflict,
     /// Only left side (Ours) has changes
@@ -43,17 +45,24 @@ pub enum ConflictType {
     IdenticalChange,
 }
 
-/// A decomposed conflict with separate content for each side.
-/// Used by the visual three-pane merge resolver.
+/// A contiguous region of a conflicted file, in file order.
+///
+/// `Stable` regions hold the common context shared by both sides (and are
+/// pre-applied to the result). Conflict regions hold the divergent `ours`/`theirs`
+/// content; the three-pane resolver reconstructs each side and the editable
+/// result by walking these regions in order.
 #[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "ts-rs", derive(TS), ts(export, export_to = "app/messages/"))]
-pub struct ConflictSlice {
+pub struct ConflictRegion {
+    /// sequential index among all regions
     pub index: usize,
-    /// [Ours, Theirs] - content from each parent
-    pub sides: [ConflictSide; 2],
-    /// The initially proposed resolution (materialized conflict markers)
-    pub initial_result: MultilineString,
-    pub conflict_type: ConflictType,
+    /// index among conflict regions only; null for stable regions
+    pub conflict_index: Option<usize>,
+    pub kind: ConflictType,
+    /// ours/left content; for stable regions this is the shared context
+    pub ours: MultilineString,
+    /// theirs/right content; for stable regions this equals `ours`
+    pub theirs: MultilineString,
 }
 
 /// Request to query conflict slices for a file.
@@ -64,12 +73,14 @@ pub struct ConflictSlicesRequest {
     pub path: TreePath,
 }
 
-/// Response containing conflict slices for a file.
+/// Response containing the ordered regions of a conflicted file.
 #[derive(Serialize, Debug)]
 #[cfg_attr(feature = "ts-rs", derive(TS), ts(export, export_to = "app/messages/"))]
 pub struct ConflictSlicesResponse {
     pub path: TreePath,
-    pub slices: Vec<ConflictSlice>,
+    pub ours_label: String,
+    pub theirs_label: String,
+    pub regions: Vec<ConflictRegion>,
 }
 
 /// The type of modification made to a file in a diff.

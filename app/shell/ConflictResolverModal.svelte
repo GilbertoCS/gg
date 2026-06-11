@@ -91,7 +91,7 @@
                     <p>{error}</p>
                     <button on:click={handleCancel}>Close</button>
                 </div>
-            {:else if response && response.slices.length === 0}
+            {:else if response && response.regions.length === 0}
                 <div class="empty-state">
                     <h3>No Conflicts Found</h3>
                     <p>This file appears to have no conflicts or has already been resolved.</p>
@@ -100,7 +100,9 @@
             {:else if response}
                 <ConflictResolver
                     path={response.path.relative_path}
-                    slices={response.slices}
+                    regions={response.regions}
+                    oursLabel={response.ours_label}
+                    theirsLabel={response.theirs_label}
                     fileExtension={fileExtension}
                     on:apply={handleApply}
                     on:cancel={handleCancel}

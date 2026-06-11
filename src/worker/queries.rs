@@ -32,11 +32,11 @@ use jj_lib::{
 };
 use pollster::FutureExt as _;
 
+#[cfg(test)]
+use crate::messages::RevHeader;
 use crate::messages::{
     ChangeHunk, ChangeLocation, ChangeRange, MultilineString, RevId, RevSet, TreePath, queries::*,
 };
-#[cfg(test)]
-use crate::messages::RevHeader;
 
 use super::{WorkspaceSession, git_util::get_git_remote_names};
 
@@ -700,8 +700,12 @@ impl<'content> UnifiedDiffHunk<'content> {
     }
 }
 
-/// Query conflict slices for a file in a revision.
-/// Decomposes Git-style conflict markers into structured data for the visual merge tool.
+/// Query the ordered regions of a conflicted file for the three-pane resolver.
+///
+/// Returns the whole file split into `Stable` regions (shared context, already
+/// merged) and conflict regions (divergent `ours`/`theirs` content). The frontend
+/// reconstructs each side and the editable result by walking the regions in order,
+/// so non-conflicting context is preserved rather than discarded.
 pub async fn query_conflict_slices(
     ws: &WorkspaceSession<'_>,
     revision_id: &RevId,
@@ -717,18 +721,16 @@ pub async fn query_conflict_slices(
     if entry.is_resolved() {
         return Ok(ConflictSlicesResponse {
             path: path.clone(),
-            slices: vec![],
+            ours_label: "Ours".to_owned(),
+            theirs_label: "Theirs".to_owned(),
+            regions: vec![],
         });
     }
 
     // Materialize the conflict to get the content with Git-style markers
-    let materialized = conflicts::materialize_tree_value(
-        ws.repo().store(),
-        &repo_path,
-        entry,
-        tree.labels(),
-    )
-    .await?;
+    let materialized =
+        conflicts::materialize_tree_value(ws.repo().store(), &repo_path, entry, tree.labels())
+            .await?;
 
     match materialized {
         MaterializedTreeValue::FileConflict(file) => {
@@ -747,78 +749,86 @@ pub async fn query_conflict_slices(
                 },
             )?;
 
-            let slices = parse_conflict_slices(&conflict_content, file.labels.as_slice())?;
+            let labels = file.labels.as_slice();
+            let (ours_label, theirs_label) = match labels.len() {
+                0 => ("Ours".to_owned(), "Theirs".to_owned()),
+                1 => (labels[0].clone(), "Theirs".to_owned()),
+                _ => (labels[0].clone(), labels[1].clone()),
+            };
+
+            let regions = parse_conflict_regions(&conflict_content);
             Ok(ConflictSlicesResponse {
                 path: path.clone(),
-                slices,
+                ours_label,
+                theirs_label,
+                regions,
             })
         }
         _ => Err(anyhow!("Path is not a file conflict")),
     }
 }
 
-/// Parse Git-style conflict markers into structured ConflictSlice objects.
-/// Format:
-///   <<<<<<< LABEL
-///   ours content
-///   =======
-///   theirs content
-///   >>>>>>> LABEL
-fn parse_conflict_slices(
-    content: &[u8],
-    labels: &[String],
-) -> Result<Vec<ConflictSlice>> {
+/// Split materialized Git-marker content into ordered regions.
+///
+/// Text outside markers becomes `Stable` regions (shared by both sides). Each
+///   <<<<<<< / ======= / >>>>>>>
+/// block becomes a conflict region carrying the `ours`/`theirs` line content.
+fn parse_conflict_regions(content: &[u8]) -> Vec<ConflictRegion> {
     let content_str = String::from_utf8_lossy(content);
     let lines: Vec<&str> = content_str.lines().collect();
 
-    let mut slices = Vec::new();
-    let mut index = 0;
+    let mut regions: Vec<ConflictRegion> = Vec::new();
+    let mut conflict_index = 0;
     let mut i = 0;
+    let mut stable: Vec<String> = Vec::new();
 
-    // Use labels if available, otherwise use defaults
-    let (ours_label, theirs_label) = match labels.len() {
-        0 => ("ours", "theirs"),
-        1 => (labels[0].as_str(), "theirs"),
-        _ => (labels[0].as_str(), labels[1].as_str()),
-    };
+    // emit the accumulated shared-context lines as a stable region
+    macro_rules! flush_stable {
+        () => {
+            if !stable.is_empty() {
+                let lines = std::mem::take(&mut stable);
+                regions.push(ConflictRegion {
+                    index: regions.len(),
+                    conflict_index: None,
+                    kind: ConflictType::Stable,
+                    ours: MultilineString {
+                        lines: lines.clone(),
+                    },
+                    theirs: MultilineString { lines },
+                });
+            }
+        };
+    }
 
     while i < lines.len() {
-        if let Some(_marker) = parse_conflict_start(lines[i]) {
-            // Found start of conflict
+        if parse_conflict_start(lines[i]).is_some() {
             let conflict_start = i;
 
-            // Find the separator =======
+            // locate the last separator and the closing marker
             let mut separator_idx = None;
             let mut end_idx = None;
-
             for j in (i + 1)..lines.len() {
                 if is_conflict_separator(lines[j]) {
                     separator_idx = Some(j);
-                } else if let Some(_end_marker) = parse_conflict_end(lines[j]) {
+                } else if parse_conflict_end(lines[j]).is_some() {
                     end_idx = Some(j);
                     break;
                 }
             }
 
             if let (Some(sep), Some(end)) = (separator_idx, end_idx) {
-                // Extract content
+                flush_stable!();
+
                 let ours_content: Vec<String> = lines[(conflict_start + 1)..sep]
                     .iter()
                     .map(|&s| s.to_string())
                     .collect();
-
                 let theirs_content: Vec<String> = lines[(sep + 1)..end]
                     .iter()
                     .map(|&s| s.to_string())
                     .collect();
 
-                let result_content: Vec<String> = lines[conflict_start..=end]
-                    .iter()
-                    .map(|&s| s.to_string())
-                    .collect();
-
-                // Determine conflict type
-                let conflict_type = if ours_content == theirs_content {
+                let kind = if ours_content == theirs_content {
                     ConflictType::IdenticalChange
                 } else if ours_content.is_empty() {
                     ConflictType::RightChange
@@ -828,42 +838,55 @@ fn parse_conflict_slices(
                     ConflictType::Conflict
                 };
 
-                slices.push(ConflictSlice {
-                    index,
-                    sides: [
-                        ConflictSide {
-                            content: MultilineString {
-                                lines: ours_content,
-                            },
-                            label: ours_label.to_string(),
-                        },
-                        ConflictSide {
-                            content: MultilineString {
-                                lines: theirs_content,
-                            },
-                            label: theirs_label.to_string(),
-                        },
-                    ],
-                    initial_result: MultilineString {
-                        lines: result_content,
+                regions.push(ConflictRegion {
+                    index: regions.len(),
+                    conflict_index: Some(conflict_index),
+                    kind,
+                    ours: MultilineString {
+                        lines: ours_content,
                     },
-                    conflict_type,
+                    theirs: MultilineString {
+                        lines: theirs_content,
+                    },
                 });
-
-                index += 1;
+                conflict_index += 1;
                 i = end + 1;
             } else {
-                // Malformed conflict, skip this line
+                // malformed marker - treat as ordinary context
+                stable.push(lines[i].to_string());
                 i += 1;
             }
         } else {
+            stable.push(lines[i].to_string());
             i += 1;
         }
     }
 
-    Ok(slices)
+    flush_stable!();
+    regions
 }
 
+#[cfg(test)]
+mod conflict_region_tests {
+    use super::*;
+
+    #[test]
+    fn parse_conflict_regions_preserves_stable_context() {
+        let regions = parse_conflict_regions(
+            b"before\n<<<<<<< ours\nleft\n=======\nright\n>>>>>>> theirs\nafter\n",
+        );
+
+        assert_eq!(3, regions.len());
+        assert_eq!(ConflictType::Stable, regions[0].kind);
+        assert_eq!(vec!["before"], regions[0].ours.lines);
+        assert_eq!(ConflictType::Conflict, regions[1].kind);
+        assert_eq!(Some(0), regions[1].conflict_index);
+        assert_eq!(vec!["left"], regions[1].ours.lines);
+        assert_eq!(vec!["right"], regions[1].theirs.lines);
+        assert_eq!(ConflictType::Stable, regions[2].kind);
+        assert_eq!(vec!["after"], regions[2].ours.lines);
+    }
+}
 fn parse_conflict_start(line: &str) -> Option<&str> {
     if line.starts_with("<<<<<<< ") {
         Some(&line[8..])
